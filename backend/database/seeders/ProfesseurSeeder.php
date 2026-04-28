@@ -3,17 +3,19 @@
 namespace Database\Seeders;
 
 use App\Models\Professeur;
-use Database\Factories\ProfesseurFactory;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class ProfesseurSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        Professeur::factory(4)->create();
+        $professorUsers = User::where('role', 'professeur')->get();
+
+        foreach ($professorUsers as $user) {
+            Professeur::firstOrCreate([
+                'user_id' => $user->id,
+            ]);
+        }
     }
 }
-

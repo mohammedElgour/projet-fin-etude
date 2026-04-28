@@ -19,6 +19,7 @@ class StudentPortalController extends Controller
 
         $notes = Note::with('module')
             ->where('stagiaire_id', $stagiaire->id)
+            ->where('validation_status', 'validated')
             ->orderByDesc('created_at')
             ->get();
 
@@ -53,13 +54,15 @@ class StudentPortalController extends Controller
         $user = $request->user();
         $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
-        $average = Note::where('stagiaire_id', $stagiaire->id)->avg('note');
+        $average = Note::where('stagiaire_id', $stagiaire->id)
+            ->where('validation_status', 'validated')
+            ->avg('note');
         $average = $average ? round((float) $average, 2) : 0.0;
 
         $status = $average >= 14 ? 'good_performance' : 'needs_improvement';
         $message = $average >= 14
-            ? 'Très bon travail, continuez ainsi.'
-            : 'Vous pouvez améliorer vos résultats avec plus de révision ciblée.';
+            ? 'Tres bon travail, continuez ainsi.'
+            : 'Vous pouvez ameliorer vos resultats avec plus de revision ciblee.';
 
         return response()->json([
             'average' => $average,

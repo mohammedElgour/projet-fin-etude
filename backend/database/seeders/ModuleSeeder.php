@@ -2,18 +2,28 @@
 
 namespace Database\Seeders;
 
+use App\Models\Filier;
 use App\Models\Module;
-use Database\Factories\ModuleFactory;
 use Illuminate\Database\Seeder;
 
 class ModuleSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        Module::factory(4)->create();
+        $filieres = Filier::get()->keyBy('nom');
+
+        $modules = [
+            ['nom' => 'Programmation Web', 'coefficient' => 3, 'filiere_id' => $filieres['Developpement Digital']->id],
+            ['nom' => 'Base de Donnees', 'coefficient' => 2, 'filiere_id' => $filieres['Developpement Digital']->id],
+            ['nom' => 'Reseaux', 'coefficient' => 3, 'filiere_id' => $filieres['Infrastructure Digitale']->id],
+            ['nom' => 'Systemes', 'coefficient' => 2, 'filiere_id' => $filieres['Infrastructure Digitale']->id],
+        ];
+
+        foreach ($modules as $module) {
+            Module::updateOrCreate(
+                ['nom' => $module['nom'], 'filiere_id' => $module['filiere_id']],
+                $module
+            );
+        }
     }
 }
-

@@ -1,18 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Moon, Menu, X, Compass } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { authApi, setAuthToken } from '../../services/api';
 
-const navLinks = [
+const publicLinks = [
   { label: 'Accueil', href: '#hero' },
-  { label: 'Fonctionnalités', href: '#features' },
-  { label: 'Comment ça marche', href: '#how-it-works' },
-  { label: 'Métiers', href: '#careers' },
-  { label: 'Témoignages', href: '#testimonials' },
+  { label: 'Fonctionnalites', href: '#features' },
+  { label: 'Comment ca marche', href: '#how-it-works' },
 ];
+
+const dashboardRouteByRole = {
+  admin: '/dashboard/admin',
+  professeur: '/dashboard/professeur',
+  stagiaire: '/dashboard/stagiaire',
+};
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const { isAuthenticated, user, logoutLocal } = useAuth();
+  const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -22,43 +31,61 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch (error) {
+      // Local logout is enough for the demo even if the API call fails.
+    } finally {
+      logoutLocal();
+      setAuthToken('');
+      navigate('/');
+    }
+  };
+
+  const dashboardLink = dashboardRouteByRole[user?.role] || '/';
+
   return (
     <motion.header
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'glass-strong shadow-lg shadow-black/5'
-          : 'bg-transparent'
+        scrolled ? 'glass-strong shadow-lg shadow-black/5' : 'bg-transparent'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-20">
-          {/* Logo */}
-          <a href="#hero" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg shadow-primary-500/25 group-hover:shadow-primary-500/40 transition-shadow">
+          <Link to="/" className="flex items-center gap-2 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg shadow-primary-500/25">
               <Compass className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold text-slate-900 dark:text-white">
-              MyWay<span className="text-primary-500">.</span>
+              ISTA<span className="text-primary-500"> Notes</span>
             </span>
-          </a>
+          </Link>
 
-          {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
+            {!isAuthenticated &&
+              publicLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-white/5 transition-all"
+                >
+                  {link.label}
+                </a>
+              ))}
+            {isAuthenticated && (
+              <Link
+                to={dashboardLink}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-white/5 transition-all"
               >
-                {link.label}
-              </a>
-            ))}
+                Tableau de bord
+              </Link>
+            )}
           </nav>
 
-          {/* Actions */}
           <div className="flex items-center gap-2">
             <button
               onClick={toggleTheme}
@@ -90,14 +117,22 @@ export default function Navbar() {
               </AnimatePresence>
             </button>
 
-            <a
-              href="#cta"
-              className="hidden sm:inline-flex px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-secondary-500 text-white text-sm font-semibold shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-105 transition-all"
-            >
-              Commencer
-            </a>
+            {isAuthenticated ? (
+              <button
+                onClick={handleLogout}
+                className="hidden sm:inline-flex px-5 py-2.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-sm font-semibold"
+              >
+                Deconnexion
+              </button>
+            ) : (
+              <a
+                href="#cta"
+                className="hidden sm:inline-flex px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-secondary-500 text-white text-sm font-semibold shadow-lg shadow-primary-500/25"
+              >
+                Commencer
+              </a>
+            )}
 
-            {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
               className="lg:hidden w-10 h-10 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-white/5 transition-colors"
@@ -109,7 +144,6 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
@@ -120,23 +154,37 @@ export default function Navbar() {
             className="lg:hidden glass-strong border-t border-white/20 dark:border-white/10 overflow-hidden"
           >
             <nav className="flex flex-col p-4 gap-1">
-              {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="px-4 py-3 rounded-xl text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-primary-50 dark:hover:bg-white/5 transition-colors"
-                >
-                  {link.label}
-                </a>
-              ))}
-              <a
-                href="#cta"
-                onClick={() => setMobileOpen(false)}
-                className="mt-2 px-5 py-3 rounded-xl bg-gradient-to-r from-primary-600 to-secondary-500 text-white text-center font-semibold shadow-lg shadow-primary-500/25"
-              >
-                Commencer
-              </a>
+              {!isAuthenticated &&
+                publicLinks.map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className="px-4 py-3 rounded-xl text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-primary-50 dark:hover:bg-white/5 transition-colors"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              {isAuthenticated && (
+                <>
+                  <Link
+                    to={dashboardLink}
+                    onClick={() => setMobileOpen(false)}
+                    className="px-4 py-3 rounded-xl text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-primary-50 dark:hover:bg-white/5 transition-colors"
+                  >
+                    Tableau de bord
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setMobileOpen(false);
+                      handleLogout();
+                    }}
+                    className="mt-2 px-5 py-3 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-center font-semibold"
+                  >
+                    Deconnexion
+                  </button>
+                </>
+              )}
             </nav>
           </motion.div>
         )}
@@ -144,4 +192,3 @@ export default function Navbar() {
     </motion.header>
   );
 }
-

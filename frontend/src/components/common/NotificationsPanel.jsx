@@ -11,13 +11,11 @@ const NotificationsPanel = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await notificationApi.list();
-      setItems(Array.isArray(data) ? data : data?.data || []);
+      const payload = await notificationApi.list();
+      const list = Array.isArray(payload?.data) ? payload.data : payload?.data?.data || [];
+      setItems(list);
     } catch (err) {
-      setError(
-        err?.response?.data?.message ||
-          'Impossible de charger les notifications.'
-      );
+      setError(err?.response?.data?.message || 'Impossible de charger les notifications.');
     } finally {
       setLoading(false);
     }
@@ -29,12 +27,11 @@ const NotificationsPanel = () => {
 
   const handleReadAll = async () => {
     try {
-      await notificationApi.readAll();
+      await notificationApi.markAllRead();
       loadNotifications();
     } catch (err) {
       setError(
-        err?.response?.data?.message ||
-          'Impossible de marquer les notifications comme lues.'
+        err?.response?.data?.message || 'Impossible de marquer les notifications comme lues.'
       );
     }
   };
@@ -54,20 +51,10 @@ const NotificationsPanel = () => {
         </button>
       </div>
 
-      {loading && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Chargement des notifications...
-        </p>
-      )}
-
-      {error && (
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-      )}
-
+      {loading && <p className="text-sm text-slate-500 dark:text-slate-400">Chargement...</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {!loading && !error && items.length === 0 && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Aucune notification pour le moment.
-        </p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Aucune notification.</p>
       )}
 
       {!loading && !error && items.length > 0 && (
@@ -75,11 +62,13 @@ const NotificationsPanel = () => {
           {items.map((item) => (
             <li
               key={item.id}
-              className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100 dark:border-slate-700"
+              className={`rounded-xl p-3 border ${
+                item.is_read
+                  ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-700'
+                  : 'bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/30'
+              }`}
             >
-              <p className="text-sm text-slate-800 dark:text-slate-100">
-                {item.message || item.titre || 'Notification'}
-              </p>
+              <p className="text-sm text-slate-800 dark:text-slate-100">{item.message}</p>
             </li>
           ))}
         </ul>

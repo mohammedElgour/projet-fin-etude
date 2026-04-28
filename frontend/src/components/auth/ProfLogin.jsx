@@ -18,10 +18,7 @@ const ProfLogin = () => {
     if (errors && typeof errors === 'object') {
       return Object.values(errors).flat().join(' ');
     }
-    return (
-      err?.response?.data?.message ||
-      'Connexion échouée. Vérifiez vos identifiants.'
-    );
+    return err?.response?.data?.message || 'Connexion echouee. Verifiez vos identifiants.';
   };
 
   const handleSubmit = async (e) => {
@@ -32,11 +29,10 @@ const ProfLogin = () => {
     setLoading(true);
 
     try {
-      const { data } = await authApi.login({ email, password });
+      const data = await authApi.login({ email, password });
 
       if (data?.user?.role !== 'professeur') {
-        setError('Ce compte ne possède pas les droits professeur.');
-        setLoading(false);
+        setError('Ce compte ne possede pas les droits professeur.');
         return;
       }
 
@@ -74,7 +70,7 @@ const ProfLogin = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300"
-              placeholder="professeur@example.com"
+              placeholder="prof@ista.test"
             />
           </div>
           <div>
@@ -88,12 +84,10 @@ const ProfLogin = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300"
-              placeholder="••••••••"
+              placeholder="password123"
             />
           </div>
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
           <motion.button
             whileHover={{ scale: loading ? 1 : 1.02 }}
@@ -103,7 +97,6 @@ const ProfLogin = () => {
             className="group relative w-full py-4 px-6 rounded-full bg-gradient-to-r from-primary-600 to-secondary-500 text-white font-semibold text-lg shadow-xl hover:shadow-primary-500/50 focus:outline-none focus:shadow-primary-500/50 transition-all duration-300 hover:from-primary-700 hover:to-secondary-600 disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {loading ? 'Connexion...' : 'Se connecter'}
-            <span className="ml-2 inline-block w-5 h-5 bg-white/20 rounded-full group-hover:w-6 group-hover:h-6 transition-all duration-300 origin-left" />
           </motion.button>
         </form>
       </motion.div>

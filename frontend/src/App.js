@@ -4,12 +4,6 @@ import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import Hero from './components/sections/Hero';
 import RoleSelection from './components/sections/RoleSelection';
-import Features from './components/sections/Features';
-import HowItWorks from './components/sections/HowItWorks';
-import CareerExploration from './components/sections/CareerExploration';
-import PersonalizedExperience from './components/sections/PersonalizedExperience';
-import Testimonials from './components/sections/Testimonials';
-import CTASection from './components/sections/CTASection';
 import AdminLogin from './components/auth/AdminLogin';
 import ProfLogin from './components/auth/ProfLogin';
 import StagiaireLogin from './components/auth/StagiaireLogin';
@@ -28,12 +22,6 @@ function App() {
             <>
               <Hero />
               <RoleSelection />
-              <Features />
-              <HowItWorks />
-              <CareerExploration />
-              <PersonalizedExperience />
-              <Testimonials />
-              <CTASection />
             </>
           } />
           <Route path="/login/admin" element={<AdminLogin />} />
@@ -69,12 +57,6 @@ function App() {
             <>
               <Hero />
               <RoleSelection />
-              <Features />
-              <HowItWorks />
-              <CareerExploration />
-              <PersonalizedExperience />
-              <Testimonials />
-              <CTASection />
             </>
           } />
         </Routes>
@@ -85,4 +67,3 @@ function App() {
 }
 
 export default App;
-

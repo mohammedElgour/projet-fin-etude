@@ -54,6 +54,18 @@ export const adminApi = {
     const response = await api.get('/admin/dashboard/stats');
     return response.data;
   },
+  pendingNotes: async () => {
+    const response = await api.get('/admin/notes/pending');
+    return response.data;
+  },
+  validateNote: async (noteId) => {
+    const response = await api.patch(`/admin/notes/${noteId}/validate`);
+    return response.data;
+  },
+  rejectNote: async (noteId, feedback = '') => {
+    const response = await api.patch(`/admin/notes/${noteId}/reject`, { feedback });
+    return response.data;
+  },
 };
 
 export const professeurApi = {
@@ -61,8 +73,20 @@ export const professeurApi = {
     const response = await api.get('/professeur/notes', { params });
     return response.data;
   },
+  saveNote: async (payload) => {
+    const response = await api.post('/professeur/notes', payload);
+    return response.data;
+  },
+  updateNote: async (noteId, payload) => {
+    const response = await api.patch(`/professeur/notes/${noteId}`, payload);
+    return response.data;
+  },
   students: async (params = {}) => {
     const response = await api.get('/professeur/students', { params });
+    return response.data;
+  },
+  catalog: async () => {
+    const response = await api.get('/professeur/catalog');
     return response.data;
   },
   schedule: async (params = {}) => {

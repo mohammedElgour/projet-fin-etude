@@ -51,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/notes/pending', [NoteValidationController::class, 'indexPending']);
         Route::patch('/notes/{note}/validate', [NoteValidationController::class, 'validateNote']);
+        Route::patch('/notes/{note}/reject', [NoteValidationController::class, 'rejectNote']);
 
         Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats']);
     });
@@ -62,6 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/notes/{note}', [ProfNoteController::class, 'update']);
 
         Route::get('/students', [ProfStudentController::class, 'index']);
+        Route::get('/catalog', [ProfStudentController::class, 'catalog']);
         Route::get('/schedule', [ProfScheduleController::class, 'index']);
     });
 

@@ -1,18 +1,32 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { setAuthToken } from '../services/api';
 
 const AuthContext = createContext(null);
 
 const STORAGE_TOKEN_KEY = 'sms_token';
 const STORAGE_USER_KEY = 'sms_user';
 
+const readStoredUser = () => {
+  const raw = localStorage.getItem(STORAGE_USER_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    localStorage.removeItem(STORAGE_USER_KEY);
+    return null;
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => localStorage.getItem(STORAGE_TOKEN_KEY) || '');
-  const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem(STORAGE_USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  });
+  const [user, setUser] = useState(() => readStoredUser());
 
   useEffect(() => {
+    setAuthToken(token);
+
     if (token) {
       localStorage.setItem(STORAGE_TOKEN_KEY, token);
     } else {

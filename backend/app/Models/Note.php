@@ -20,6 +20,9 @@ class Note extends Model
         'module_id',
         'note',
         'is_validated',
+        'validation_status',
+        'feedback',
+        'reviewed_at',
     ];
 
     /**
@@ -30,6 +33,7 @@ class Note extends Model
     protected $casts = [
         'note' => 'decimal:2',
         'is_validated' => 'boolean',
+        'reviewed_at' => 'datetime',
     ];
 
     /**
@@ -48,4 +52,3 @@ class Note extends Model
         return $this->belongsTo(Module::class);
     }
 }
-

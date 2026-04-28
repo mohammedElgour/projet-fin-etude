@@ -2,17 +2,24 @@
 
 namespace Database\Seeders;
 
+use App\Models\Filier;
 use App\Models\Groupe;
 use Illuminate\Database\Seeder;
 
 class GroupeSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        Groupe::factory(4)->create();
+        $filieres = Filier::get()->keyBy('nom');
+
+        $groupes = [
+            ['nom' => 'DD101', 'filiere_id' => $filieres['Developpement Digital']->id],
+            ['nom' => 'DD102', 'filiere_id' => $filieres['Developpement Digital']->id],
+            ['nom' => 'ID201', 'filiere_id' => $filieres['Infrastructure Digitale']->id],
+        ];
+
+        foreach ($groupes as $groupe) {
+            Groupe::updateOrCreate(['nom' => $groupe['nom']], $groupe);
+        }
     }
 }
-

@@ -3,16 +3,25 @@
 namespace Database\Seeders;
 
 use App\Models\Filier;
-use Database\Factories\FilierFactory;
 use Illuminate\Database\Seeder;
 
 class FilierSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        Filier::factory(2)->create();
+        $filieres = [
+            [
+                'nom' => 'Developpement Digital',
+                'description' => 'Formation orientee web, mobile et backend.',
+            ],
+            [
+                'nom' => 'Infrastructure Digitale',
+                'description' => 'Formation reseaux, systemes et support.',
+            ],
+        ];
+
+        foreach ($filieres as $filiere) {
+            Filier::updateOrCreate(['nom' => $filiere['nom']], $filiere);
+        }
     }
 }

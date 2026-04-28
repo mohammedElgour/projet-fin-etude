@@ -26,12 +26,16 @@ class NoteFactory extends Factory
      */
     public function definition(): array
     {
+        $status = $this->faker->randomElement(['pending', 'validated', 'rejected']);
+
         return [
             'stagiaire_id' => Stagiaire::factory(),
             'module_id' => Module::factory(),
             'note' => $this->faker->randomFloat(2, 0, 20),
-            'is_validated' => $this->faker->boolean(70),
+            'is_validated' => $status === 'validated',
+            'validation_status' => $status,
+            'feedback' => $status === 'rejected' ? 'Veuillez verifier cette note.' : null,
+            'reviewed_at' => $status === 'pending' ? null : now(),
         ];
     }
 }
-
