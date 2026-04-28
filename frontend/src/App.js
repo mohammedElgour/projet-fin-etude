@@ -1,26 +1,83 @@
 import React from 'react';
+import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import Hero from './components/sections/Hero';
+import RoleSelection from './components/sections/RoleSelection';
 import Features from './components/sections/Features';
 import HowItWorks from './components/sections/HowItWorks';
 import CareerExploration from './components/sections/CareerExploration';
 import PersonalizedExperience from './components/sections/PersonalizedExperience';
 import Testimonials from './components/sections/Testimonials';
 import CTASection from './components/sections/CTASection';
+import AdminLogin from './components/auth/AdminLogin';
+import ProfLogin from './components/auth/ProfLogin';
+import StagiaireLogin from './components/auth/StagiaireLogin';
+import ProtectedRoute from './components/common/ProtectedRoute';
+import AdminDashboard from './pages/AdminDashboard';
+import ProfesseurDashboard from './pages/ProfesseurDashboard';
+import StagiaireDashboard from './pages/StagiaireDashboard';
 
 function App() {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950">
       <Navbar />
       <main>
-        <Hero />
-        <Features />
-        <HowItWorks />
-        <CareerExploration />
-        <PersonalizedExperience />
-        <Testimonials />
-        <CTASection />
+        <Routes>
+          <Route path="/" element={
+            <>
+              <Hero />
+              <RoleSelection />
+              <Features />
+              <HowItWorks />
+              <CareerExploration />
+              <PersonalizedExperience />
+              <Testimonials />
+              <CTASection />
+            </>
+          } />
+          <Route path="/login/admin" element={<AdminLogin />} />
+          <Route path="/login/professeur" element={<ProfLogin />} />
+          <Route path="/login/stagiaire" element={<StagiaireLogin />} />
+
+          <Route
+            path="/dashboard/admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/professeur"
+            element={
+              <ProtectedRoute allowedRoles={['professeur']}>
+                <ProfesseurDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/stagiaire"
+            element={
+              <ProtectedRoute allowedRoles={['stagiaire']}>
+                <StagiaireDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={
+            <>
+              <Hero />
+              <RoleSelection />
+              <Features />
+              <HowItWorks />
+              <CareerExploration />
+              <PersonalizedExperience />
+              <Testimonials />
+              <CTASection />
+            </>
+          } />
+        </Routes>
       </main>
       <Footer />
     </div>
