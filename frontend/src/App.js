@@ -3,6 +3,9 @@ import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import Hero from './components/sections/Hero';
+import FilieresSection from './components/sections/FilieresSection';
+import AboutIstaSection from './components/sections/AboutIstaSection';
+import StatsSection from './components/sections/StatsSection';
 import RoleSelection from './components/sections/RoleSelection';
 import AdminLogin from './components/auth/AdminLogin';
 import ProfLogin from './components/auth/ProfLogin';
@@ -14,13 +17,16 @@ import StagiaireDashboard from './pages/StagiaireDashboard';
 
 function App() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
+    <div className="min-h-screen bg-white dark:bg-slate-950 transition-colors duration-300">
       <Navbar />
       <main>
         <Routes>
           <Route path="/" element={
             <>
               <Hero />
+              <StatsSection />
+              <FilieresSection />
+              <AboutIstaSection />
               <RoleSelection />
             </>
           } />
@@ -56,6 +62,9 @@ function App() {
           <Route path="*" element={
             <>
               <Hero />
+              <StatsSection />
+              <FilieresSection />
+              <AboutIstaSection />
               <RoleSelection />
             </>
           } />

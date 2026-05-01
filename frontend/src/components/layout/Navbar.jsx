@@ -8,8 +8,9 @@ import { authApi, setAuthToken } from '../../services/api';
 
 const publicLinks = [
   { label: 'Accueil', href: '#hero' },
-  { label: 'Fonctionnalites', href: '#features' },
-  { label: 'Comment ca marche', href: '#how-it-works' },
+  { label: 'Filieres', href: '#filieres' },
+  { label: 'A propos', href: '#about' },
+  { label: 'Acces', href: '#roles' },
 ];
 
 const dashboardRouteByRole = {
@@ -126,8 +127,8 @@ export default function Navbar() {
               </button>
             ) : (
               <a
-                href="#cta"
-                className="hidden sm:inline-flex px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-secondary-500 text-white text-sm font-semibold shadow-lg shadow-primary-500/25"
+                href="#roles"
+                className="hidden sm:inline-flex rounded-xl bg-gradient-to-r from-sky-600 via-cyan-600 to-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/25"
               >
                 Commencer
               </a>

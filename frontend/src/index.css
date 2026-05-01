@@ -39,7 +39,7 @@
   }
 
   * {
-    border-color: hsl(var(--border));
+    @apply border-border transition-colors duration-300;
   }
 
   html {
