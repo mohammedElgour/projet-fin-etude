@@ -17,8 +17,14 @@ class EmploiDuTemps extends Model
      */
     protected $fillable = [
         'groupe_id',
+        'module_id',
+        'professeur_id',
         'fichier',
         'date',
+        'day_of_week',
+        'start_time',
+        'end_time',
+        'room',
     ];
     protected $table = 'emplois_du_temps';
 
@@ -39,5 +45,14 @@ class EmploiDuTemps extends Model
     {
         return $this->belongsTo(Groupe::class);
     }
-}
 
+    public function module(): BelongsTo
+    {
+        return $this->belongsTo(Module::class);
+    }
+
+    public function professeur(): BelongsTo
+    {
+        return $this->belongsTo(Professeur::class);
+    }
+}

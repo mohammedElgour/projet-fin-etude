@@ -13,9 +13,41 @@ use Illuminate\Validation\Rule;
 
 class ProfesseurController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $professeurs = Professeur::with('user')->paginate(15);
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'sort_by' => ['nullable', 'in:created_at,name,email'],
+            'sort_dir' => ['nullable', 'in:asc,desc'],
+        ]);
+
+        $sortBy = $validated['sort_by'] ?? 'created_at';
+        $sortDir = $validated['sort_dir'] ?? 'desc';
+        $search = trim((string) ($validated['search'] ?? ''));
+
+        $professeurs = Professeur::query()
+            ->with('user')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->whereHas('user', function ($userQuery) use ($search) {
+                    $userQuery
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            });
+
+        if (in_array($sortBy, ['name', 'email'], true)) {
+            $professeurs
+                ->join('users', 'professeurs.user_id', '=', 'users.id')
+                ->select('professeurs.*')
+                ->orderBy("users.{$sortBy}", $sortDir);
+        } else {
+            $professeurs->orderBy("professeurs.{$sortBy}", $sortDir);
+        }
+
+        $professeurs = $professeurs
+            ->paginate($validated['per_page'] ?? 10)
+            ->appends($request->query());
 
         return response()->json($professeurs);
     }

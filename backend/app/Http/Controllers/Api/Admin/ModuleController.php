@@ -6,13 +6,41 @@ use App\Http\Controllers\Controller;
 use App\Models\Module;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class ModuleController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $modules = Module::with('filier')->paginate(15);
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'filiere_id' => ['nullable', 'integer', 'exists:filiers,id'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'sort_by' => ['nullable', 'in:nom,coefficient,created_at,notes_count'],
+            'sort_dir' => ['nullable', 'in:asc,desc'],
+        ]);
+
+        $sortBy = $validated['sort_by'] ?? 'created_at';
+        $sortDir = $validated['sort_dir'] ?? 'desc';
+        $search = trim((string) ($validated['search'] ?? ''));
+
+        $modules = Module::query()
+            ->with('filier')
+            ->withCount('notes')
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($nestedQuery) use ($search) {
+                    $nestedQuery
+                        ->where('nom', 'like', "%{$search}%")
+                        ->orWhereHas('filier', function ($filiereQuery) use ($search) {
+                            $filiereQuery->where('nom', 'like', "%{$search}%");
+                        });
+                });
+            })
+            ->when(!empty($validated['filiere_id']), function ($query) use ($validated) {
+                $query->where('filiere_id', $validated['filiere_id']);
+            })
+            ->orderBy($sortBy, $sortDir)
+            ->paginate($validated['per_page'] ?? 10)
+            ->appends($request->query());
 
         return response()->json($modules);
     }
@@ -32,7 +60,8 @@ class ModuleController extends Controller
 
     public function show(Module $module): JsonResponse
     {
-        $module->load('filier');
+        $module->load(['filier', 'notes.stagiaire.user'])
+            ->loadCount('notes');
 
         return response()->json($module);
     }

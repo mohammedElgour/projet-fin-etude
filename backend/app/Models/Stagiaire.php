@@ -19,6 +19,15 @@ class Stagiaire extends Model
     protected $fillable = [
         'user_id',
         'groupe_id',
+        'cin',
+        'phone',
+        'address',
+        'birth_date',
+        'status',
+    ];
+
+    protected $casts = [
+        'birth_date' => 'date',
     ];
 
     /**
@@ -47,4 +56,3 @@ class Stagiaire extends Model
 
     protected $table = 'stagiaires';
 }
-

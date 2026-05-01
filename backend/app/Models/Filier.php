@@ -21,19 +21,18 @@ class Filier extends Model
     ];
 
     /**
-     * Get the modules for the filier.
+     * Get the modules for the filiere.
      */
     public function modules(): HasMany
     {
-        return $this->hasMany(Module::class);
+        return $this->hasMany(Module::class, 'filiere_id');
     }
 
     /**
-     * Get the groupes for the filier.
+     * Get the groupes for the filiere.
      */
     public function groupes(): HasMany
     {
-        return $this->hasMany(Groupe::class);
+        return $this->hasMany(Groupe::class, 'filiere_id');
     }
 }
-

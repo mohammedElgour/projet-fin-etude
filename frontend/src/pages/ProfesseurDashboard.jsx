@@ -8,26 +8,40 @@ const ProfesseurDashboard = () => {
   const [catalog, setCatalog] = useState({ groupes: [], modules: [] });
   const [students, setStudents] = useState([]);
   const [schedule, setSchedule] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [selectedModule, setSelectedModule] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [activeStudent, setActiveStudent] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const loadData = useCallback(async (groupId = '', moduleId = '') => {
+  const loadStats = useCallback(async () => {
+    setLoadingStats(true);
+    try {
+      const countRes = await professeurApi.notificationsCount();
+      setUnreadCount(countRes.unread_count || 0);
+    } catch (err) {
+      // silent
+    } finally {
+      setLoadingStats(false);
+    }
+  }, []);
+
+  const loadData = useCallback(async (groupId, moduleId) => {
     setLoading(true);
     setError('');
 
     try {
       const [catalogRes, studentsRes, scheduleRes] = await Promise.all([
         professeurApi.catalog(),
-        professeurApi.students({
-          ...(groupId ? { groupe_id: groupId } : {}),
-          ...(moduleId ? { module_id: moduleId } : {}),
+        professeurApi.stagiaires({
+          groupe_id: groupId || undefined,
+          module_id: moduleId || undefined,
         }),
-        professeurApi.schedule(groupId ? { groupe_id: groupId } : {}),
+        professeurApi.schedule({ groupe_id: groupId || undefined }),
       ]);
 
       setCatalog(catalogRes);
@@ -41,8 +55,8 @@ const ProfesseurDashboard = () => {
   }, []);
 
   useEffect(() => {
-    loadData(selectedGroup, selectedModule);
-  }, [loadData, selectedGroup, selectedModule]);
+    loadStats();
+  }, [loadStats]);
 
   const rows = useMemo(
     () =>

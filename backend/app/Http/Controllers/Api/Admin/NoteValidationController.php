@@ -28,6 +28,12 @@ class NoteValidationController extends Controller
             ]);
         }
 
+        if ($note->validation_status !== 'pending') {
+            return response()->json([
+                'message' => 'Only pending notes can be validated.',
+            ], 422);
+        }
+
         $note->update([
             'is_validated' => true,
             'validation_status' => 'validated',
@@ -40,6 +46,9 @@ class NoteValidationController extends Controller
         if ($stagiaireUser) {
             Notification::create([
                 'user_id' => $stagiaireUser->id,
+                'title' => 'Note validee',
+                'type' => 'grade',
+                'role' => 'stagiaire',
                 'message' => "Votre note du module {$note->module->nom} a ete validee.",
                 'is_read' => false,
             ]);
@@ -57,6 +66,12 @@ class NoteValidationController extends Controller
             'feedback' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        if ($note->validation_status !== 'pending') {
+            return response()->json([
+                'message' => 'Only pending notes can be rejected.',
+            ], 422);
+        }
+
         $note->update([
             'is_validated' => false,
             'validation_status' => 'rejected',
@@ -69,6 +84,9 @@ class NoteValidationController extends Controller
         if ($stagiaireUser) {
             Notification::create([
                 'user_id' => $stagiaireUser->id,
+                'title' => 'Note rejetee',
+                'type' => 'grade',
+                'role' => 'stagiaire',
                 'message' => "Votre note du module {$note->module->nom} a ete rejetee pour revision.",
                 'is_read' => false,
             ]);

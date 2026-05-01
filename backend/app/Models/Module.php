@@ -32,11 +32,11 @@ class Module extends Model
     ];
 
     /**
-     * Get the filier that owns the module.
+     * Get the filiere that owns the module.
      */
     public function filier(): BelongsTo
     {
-        return $this->belongsTo(Filier::class);
+        return $this->belongsTo(Filier::class, 'filiere_id');
     }
 
     /**
@@ -47,6 +47,10 @@ class Module extends Model
         return $this->hasMany(Note::class);
     }
 
+    public function emploisDuTemps(): HasMany
+    {
+        return $this->hasMany(EmploiDuTemps::class);
+    }
+
     protected $table = 'modules';
 }
-

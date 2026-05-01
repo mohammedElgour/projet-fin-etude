@@ -15,6 +15,7 @@ class GroupeResource extends JsonResource
             'filiere_id' => $this->filiere_id,
             'filiere' => $this->whenLoaded('filier'),
             'students_count' => $this->whenCounted('stagiaires'),
+            'stagiaires' => $this->whenLoaded('stagiaires'),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

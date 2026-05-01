@@ -24,11 +24,11 @@ class Groupe extends Model
     ];
 
     /**
-     * Get the filier that owns the groupe.
+     * Get the filiere that owns the groupe.
      */
     public function filier(): BelongsTo
     {
-        return $this->belongsTo(Filier::class);
+        return $this->belongsTo(Filier::class, 'filiere_id');
     }
 
     /**
@@ -47,4 +47,3 @@ class Groupe extends Model
         return $this->hasMany(EmploiDuTemps::class);
     }
 }
-

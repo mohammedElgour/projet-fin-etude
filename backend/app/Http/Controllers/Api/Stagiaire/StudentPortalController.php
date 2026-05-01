@@ -42,7 +42,11 @@ class StudentPortalController extends Controller
     {
         $user = $request->user();
 
-        $announcements = Notification::where('user_id', $user->id)
+        $announcements = Notification::query()
+            ->where(function ($query) use ($user) {
+                $query->where('user_id', $user->id)
+                    ->orWhere('role', 'stagiaire');
+            })
             ->latest()
             ->get();
 

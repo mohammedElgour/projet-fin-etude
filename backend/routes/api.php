@@ -7,10 +7,13 @@ use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardControll
 use App\Http\Controllers\Api\Admin\FiliereController;
 use App\Http\Controllers\Api\Admin\ModuleController;
 use App\Http\Controllers\Api\Admin\NoteValidationController;
+use App\Http\Controllers\Api\Admin\NotificationManagementController;
 use App\Http\Controllers\Api\Admin\ProfesseurController;
 use App\Http\Controllers\Api\Admin\StagiaireController;
+use App\Http\Controllers\Api\Admin\TimetableController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Common\NotificationController;
+use App\Http\Controllers\Api\Professeur\DashboardController as ProfDashboardController;
 use App\Http\Controllers\Api\Professeur\NoteController as ProfNoteController;
 use App\Http\Controllers\Api\Professeur\ScheduleController as ProfScheduleController;
 use App\Http\Controllers\Api\Professeur\StudentController as ProfStudentController;
@@ -40,6 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::get('/notifications/count', [NotificationController::class, 'unreadCount']);
 
     // Admin (Directeur)
     Route::middleware('role:admin')->prefix('admin')->group(function () {
@@ -48,6 +52,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('stagiaires', StagiaireController::class);
         Route::apiResource('professeurs', ProfesseurController::class);
         Route::apiResource('groupes', \App\Http\Controllers\Api\Admin\GroupeController::class);
+        Route::apiResource('timetables', TimetableController::class);
+        Route::post('/notifications', [NotificationManagementController::class, 'store']);
 
         Route::get('/notes/pending', [NoteValidationController::class, 'indexPending']);
         Route::patch('/notes/{note}/validate', [NoteValidationController::class, 'validateNote']);
@@ -62,9 +68,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/notes', [ProfNoteController::class, 'storeOrUpdate']);
         Route::patch('/notes/{note}', [ProfNoteController::class, 'update']);
 
-        Route::get('/students', [ProfStudentController::class, 'index']);
+        Route::get('/stagiaires', [ProfStudentController::class, 'index']);
         Route::get('/catalog', [ProfStudentController::class, 'catalog']);
         Route::get('/schedule', [ProfScheduleController::class, 'index']);
+        Route::get('/dashboard/stats', [ProfDashboardController::class, 'stats']);
     });
 
     // Stagiaire

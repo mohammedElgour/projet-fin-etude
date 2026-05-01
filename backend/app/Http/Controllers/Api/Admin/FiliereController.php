@@ -13,9 +13,32 @@ class FiliereController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $filieres = Filier::with(['modules', 'groupes'])->paginate(10);
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'sort_by' => ['nullable', 'in:nom,created_at,modules_count,groupes_count'],
+            'sort_dir' => ['nullable', 'in:asc,desc'],
+        ]);
+
+        $sortBy = $validated['sort_by'] ?? 'created_at';
+        $sortDir = $validated['sort_dir'] ?? 'desc';
+        $search = trim((string) ($validated['search'] ?? ''));
+
+        $filieres = Filier::query()
+            ->with(['modules', 'groupes'])
+            ->withCount(['modules', 'groupes'])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($nestedQuery) use ($search) {
+                    $nestedQuery
+                        ->where('nom', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy($sortBy, $sortDir)
+            ->paginate($validated['per_page'] ?? 10)
+            ->appends($request->query());
 
         return response()->json($filieres);
     }
@@ -33,31 +56,33 @@ class FiliereController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Filier $filier)
+    public function show(Filier $filiere)
     {
-        $filier->load(['modules.groupes', 'groupes.stagiaires']);
+        $filiere = Filier::query()
+            ->with(['modules', 'groupes.stagiaires.user'])
+            ->withCount(['modules', 'groupes'])
+            ->findOrFail($filiere->id);
 
-        return response()->json($filier);
+        return response()->json($filiere);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateFiliereRequest $request, Filier $filier)
+    public function update(UpdateFiliereRequest $request, Filier $filiere)
     {
-        $filier->update($request->validated());
+        $filiere->update($request->validated());
 
-        return response()->json($filier->fresh());
+        return response()->json($filiere->fresh());
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Filier $filier)
+    public function destroy(Filier $filiere)
     {
-        $filier->delete();
+        $filiere->delete();
 
         return response()->json(null, 204);
     }
 }
-

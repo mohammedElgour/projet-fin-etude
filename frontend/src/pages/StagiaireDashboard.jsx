@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import NotificationsPanel from '../components/common/NotificationsPanel';
 import { stagiaireApi } from '../services/api';
+import { normalizeTimetableEntries } from '../utils/timetable';
 
 const StagiaireDashboard = () => {
   const [notes, setNotes] = useState([]);
@@ -38,13 +39,13 @@ const StagiaireDashboard = () => {
   }, []);
 
   const average = useMemo(() => recommendation?.average ?? 0, [recommendation]);
-  const scheduleItems = schedule.flatMap((entry) =>
-    Array.isArray(entry.fichier)
-      ? entry.fichier.map((slot, index) => ({
-          id: `${entry.id}-${index}`,
-          label: `${slot.jour} ${slot.heure} - ${slot.module}`,
-        }))
-      : []
+  const scheduleItems = useMemo(
+    () =>
+      normalizeTimetableEntries(schedule).map((slot) => ({
+        id: slot.id,
+        label: `${slot.day} ${slot.endTime ? `${slot.startTime} - ${slot.endTime}` : slot.startTime} - ${slot.module}`,
+      })),
+    [schedule]
   );
 
   return (

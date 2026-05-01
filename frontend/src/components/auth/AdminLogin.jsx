@@ -41,7 +41,7 @@ const AdminLogin = () => {
 
       login({ token: data.token, user: data.user });
       setAuthToken(data.token);
-      navigate('/dashboard/admin');
+      navigate('/dashboard');
     } catch (err) {
       setError(parseErrorMessage(err));
     } finally {

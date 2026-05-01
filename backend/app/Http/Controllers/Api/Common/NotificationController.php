@@ -42,4 +42,18 @@ class NotificationController extends Controller
             'message' => 'All notifications marked as read.',
         ]);
     }
+
+    /**
+     * Get unread notifications count for the authenticated user.
+     */
+    public function unreadCount(Request $request): JsonResponse
+    {
+        $count = Notification::where('user_id', $request->user()->id)
+            ->where('is_read', false)
+            ->count();
+
+        return response()->json([
+            'unread_count' => $count,
+        ]);
+    }
 }

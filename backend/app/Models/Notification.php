@@ -17,8 +17,12 @@ class Notification extends Model
      */
     protected $fillable = [
         'user_id',
+        'title',
+        'type',
+        'role',
         'message',
         'is_read',
+        'read_at',
     ];
 
     /**
@@ -28,6 +32,11 @@ class Notification extends Model
      */
     protected $casts = [
         'is_read' => 'boolean',
+        'read_at' => 'datetime',
+    ];
+
+    protected $appends = [
+        'formatted_created_at',
     ];
 
     /**
@@ -37,5 +46,9 @@ class Notification extends Model
     {
         return $this->belongsTo(User::class);
     }
-}
 
+    public function getFormattedCreatedAtAttribute(): string
+    {
+        return optional($this->created_at)?->diffForHumans() ?? '';
+    }
+}

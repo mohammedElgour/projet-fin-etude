@@ -18,6 +18,7 @@ class Note extends Model
     protected $fillable = [
         'stagiaire_id',
         'module_id',
+        'professeur_id',
         'note',
         'is_validated',
         'validation_status',
@@ -50,5 +51,13 @@ class Note extends Model
     public function module(): BelongsTo
     {
         return $this->belongsTo(Module::class);
+    }
+
+    /**
+     * Get the professeur that created the note.
+     */
+    public function professeur(): BelongsTo
+    {
+        return $this->belongsTo(Professeur::class);
     }
 }
