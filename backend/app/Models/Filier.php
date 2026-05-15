@@ -25,7 +25,7 @@ class Filier extends Model
      */
     public function modules(): HasMany
     {
-        return $this->hasMany(Module::class);
+        return $this->hasMany(Module::class, 'filiere_id');
     }
 
     /**
@@ -33,7 +33,6 @@ class Filier extends Model
      */
     public function groupes(): HasMany
     {
-        return $this->hasMany(Groupe::class);
+        return $this->hasMany(Groupe::class, 'filiere_id');
     }
 }
-

@@ -13,8 +13,8 @@ class GroupeSeeder extends Seeder
         $filieres = Filier::get()->keyBy('nom');
 
         $groupes = [
-            ['nom' => 'DD101', 'filiere_id' => $filieres['Developpement Digital']->id],
-            ['nom' => 'DD102', 'filiere_id' => $filieres['Developpement Digital']->id],
+            ['nom' => 'DD101', 'filiere_id' => $filieres["D\u{00E9}veloppement Digital"]->id],
+            ['nom' => 'DD102', 'filiere_id' => $filieres["D\u{00E9}veloppement Digital"]->id],
             ['nom' => 'ID201', 'filiere_id' => $filieres['Infrastructure Digitale']->id],
         ];
 

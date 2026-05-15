@@ -1,23 +1,36 @@
-# Dark Mode Fix Progress
+# TODO - Directeur Dashboard
 
-## Plan Status
-- [x] ✅ Analyzed files (tailwind.config.js, ThemeContext.js, index.js, App.js, Navbar.jsx, index.css)
-- [x] ✅ Confirmed plan with user
+## Étape 0 — Analyse (fait)
+- Vérifier structure existante (DashboardLayout, ProtectedRoute, pages Admin/Prof/Stagiaire, API services).
 
-## Implementation Steps
-- [ ] 1. Add global `transition-colors duration-300` to `frontend/src/index.css`
-- [ ] 2. Create reusable `DarkModeToggle.jsx` in `frontend/src/components/common/`
-- [ ] 3. Update `frontend/src/App.js` root div with transition
-- [ ] 4. Add dark variants to sections:
-  - [ ] `frontend/src/components/sections/Hero.jsx`
-  - [ ] `frontend/src/components/sections/StatsSection.jsx` 
-  - [ ] `frontend/src/components/sections/FilieresSection.jsx`
-  - [ ] `frontend/src/components/sections/AboutIstaSection.jsx`
-  - [ ] `frontend/src/components/sections/RoleSelection.jsx`
-- [ ] 5. Update `frontend/src/components/layout/Footer.jsx`
-- [ ] 6. Test with `npm run dev` + browser toggle
+## Étape 1 — Routing + Protection
+- [x] Mettre à jour `frontend/src/App.js` pour ajouter `/dashboard/directeur` protégé par `allowedRoles={['directeur']}`.
+- [x] Ajouter les routes enfants pour: dashboard, stagiaires, professeurs, notes, filières, emplois du temps, notifications, profile, settings.
 
-## Testing
-- [ ] Verify smooth transitions
-- [ ] Check all sections/cards/text in dark mode
-- [ ] Confirm localStorage persistence
+
+
+
+## Étape 2 — Sidebar Directeur
+- [ ] Mettre à jour `frontend/src/components/layout/DashboardLayout.jsx` pour ajouter `sidebarConfig.directeur`.
+
+
+## Étape 3 — Dashboard Directeur
+- [ ] Créer `frontend/src/pages/DirecteurDashboard.jsx` (KPI, charts, panel notifications, quick actions).
+- [ ] Créer le hook `frontend/src/hooks/useDirecteurDashboardData.js`.
+
+## Étape 4 — Pages Gestion (6)
+- [ ] Créer `frontend/src/pages/DirecteurStagiairesPage.jsx` + hook.
+- [ ] Créer `frontend/src/pages/DirecteurProfesseursPage.jsx` + hook.
+- [ ] Créer `frontend/src/pages/DirecteurNotesPage.jsx` + hook.
+- [ ] Créer `frontend/src/pages/DirecteurFilieresPage.jsx` + hook (mock-ready).
+- [ ] Créer `frontend/src/pages/DirecteurEmploisDuTempsPage.jsx` + hook (mock-ready).
+- [ ] Créer `frontend/src/pages/DirecteurNotificationsPage.jsx` + hook.
+
+## Étape 5 — Hooks/API
+- [ ] Utiliser `adminApi.*` là où disponible, sinon mock structuré prêt pour intégration.
+
+## Étape 6 — Vérification
+- [ ] Lancer build/start frontend.
+- [ ] Vérifier navigation, pages, responsive sidebar, et absence d’erreurs console.
+
+

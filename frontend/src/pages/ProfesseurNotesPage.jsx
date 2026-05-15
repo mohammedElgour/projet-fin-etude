@@ -1,0 +1,151 @@
+import React, { useState } from 'react';
+import CrudModal from '../components/admin/CrudModal';
+import ManagementTable from '../components/admin/ManagementTable';
+import { useProfesseurData } from '../hooks/useProfesseurData';
+import { professeurApi } from '../services/api';
+
+const ProfesseurNotesPage = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [activeStudent, setActiveStudent] = useState(null);
+  const {
+    catalog,
+    rows,
+    selectedGroup,
+    setSelectedGroup,
+    selectedModule,
+    setSelectedModule,
+    loading,
+    error,
+    setError,
+    reload,
+  } = useProfesseurData();
+
+  const openNoteModal = (row) => {
+    if (!selectedModule) {
+      setError('Selectionnez un module avant de saisir une note.');
+      return;
+    }
+
+    setActiveStudent(row);
+    setModalOpen(true);
+  };
+
+  const handleSubmitNote = async (values) => {
+    try {
+      await professeurApi.saveNote({
+        stagiaire_id: activeStudent.studentId,
+        module_id: Number(selectedModule),
+        note: Number(values.note),
+      });
+      setModalOpen(false);
+      setActiveStudent(null);
+      reload();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Impossible d enregistrer la note.');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">{error}</div>}
+
+      <section className="rounded-[28px] border border-white/70 bg-white/80 p-5 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/70">
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row">
+          <div className="flex-1">
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Groupe</label>
+            <select
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm transition focus:border-sky-400 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+            >
+              <option value="">Tous les groupes</option>
+              {catalog.groupes.map((groupe) => (
+                <option key={groupe.id} value={groupe.id}>
+                  {groupe.nom} - {groupe.filier?.nom}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Module</label>
+            <select
+              value={selectedModule}
+              onChange={(e) => setSelectedModule(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm transition focus:border-sky-400 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+            >
+              <option value="">Selectionner un module</option>
+              {catalog.modules.map((module) => (
+                <option key={module.id} value={module.id}>
+                  {module.nom} - {module.filier?.nom}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <ManagementTable
+          data={rows}
+          columns={[
+            { key: 'name', header: 'Stagiaire' },
+            { key: 'groupe', header: 'Groupe' },
+            { key: 'filiere', header: 'Filiere' },
+            {
+              key: 'noteValue',
+              header: 'Note',
+              render: (row) => (row.noteValue ? `${row.noteValue}/20` : 'A saisir'),
+            },
+            {
+              key: 'noteStatus',
+              header: 'Statut',
+              render: (row) => {
+                const styles = {
+                  validated: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+                  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+                  rejected: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300',
+                  not_set: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+                };
+
+                return (
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${styles[row.noteStatus]}`}>
+                    {row.noteStatus}
+                  </span>
+                );
+              },
+            },
+          ]}
+          onEdit={openNoteModal}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          loading={loading}
+          emptyMessage="Aucun stagiaire pour ces filtres"
+        />
+      </section>
+
+      <CrudModal
+        isOpen={modalOpen}
+        title={activeStudent ? `Saisir une note pour ${activeStudent.name}` : 'Saisir une note'}
+        fields={[
+          {
+            name: 'note',
+            label: 'Note sur 20',
+            type: 'number',
+            required: true,
+            min: 0,
+            max: 20,
+            step: 0.25,
+          },
+        ]}
+        initialValues={{ note: activeStudent?.noteValue || '' }}
+        onClose={() => {
+          setModalOpen(false);
+          setActiveStudent(null);
+        }}
+        onSubmit={handleSubmitNote}
+        submitLabel="Envoyer pour validation"
+      />
+    </div>
+  );
+};
+
+export default ProfesseurNotesPage;

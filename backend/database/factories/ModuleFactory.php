@@ -26,10 +26,17 @@ class ModuleFactory extends Factory
     public function definition(): array
     {
         return [
-            'nom' => $this->faker->randomElement(['Programmation Web', 'Bases de Données', 'Réseaux', 'Systèmes d\'Exploitation', 'Développement Backend', 'Frontend JS']),
+            'code' => 'M' . $this->faker->unique()->numberBetween(101, 199),
+            'nom' => $this->faker->randomElement([
+                'Programmation Web',
+                'Bases de Donnees',
+                'Reseaux',
+                'Systemes d\'Exploitation',
+                'Developpement Backend',
+                'Frontend JS',
+            ]),
             'coefficient' => $this->faker->randomFloat(2, 1, 5),
             'filiere_id' => Filier::factory(),
         ];
     }
 }
-

@@ -5,19 +5,65 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Filiere\StoreFiliereRequest;
 use App\Http\Requests\Api\Filiere\UpdateFiliereRequest;
+use App\Http\Resources\FiliereResource;
 use App\Models\Filier;
+use App\Support\FiliereNameNormalizer;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class FiliereController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $filieres = Filier::with(['modules', 'groupes'])->paginate(10);
+        try {
+            $perPage = max(1, min((int) $request->integer('per_page', 10), 100));
+            $page = LengthAwarePaginator::resolveCurrentPage();
 
-        return response()->json($filieres);
+            $filieres = Filier::query()
+                ->withCount(['modules', 'groupes'])
+                ->get()
+                ->map(function (Filier $filiere) {
+                    $filiere->nom = FiliereNameNormalizer::canonicalize($filiere->nom);
+
+                    return $filiere;
+                })
+                ->sortBy(function (Filier $filiere) {
+                    return [
+                        FiliereNameNormalizer::key($filiere->nom),
+                        $filiere->id,
+                    ];
+                })
+                ->unique(function (Filier $filiere) {
+                    return FiliereNameNormalizer::key($filiere->nom);
+                })
+                ->values();
+
+            $paginator = new LengthAwarePaginator(
+                $filieres->forPage($page, $perPage)->values(),
+                $filieres->count(),
+                $perPage,
+                $page,
+                [
+                    'path' => $request->url(),
+                    'query' => $request->query(),
+                ]
+            );
+
+            return FiliereResource::collection($paginator);
+        } catch (Throwable $exception) {
+            Log::error('Failed to fetch filieres list.', [
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to load filieres at the moment.',
+            ], 500);
+        }
     }
 
     /**
@@ -60,4 +106,3 @@ class FiliereController extends Controller
         return response()->json(null, 204);
     }
 }
-

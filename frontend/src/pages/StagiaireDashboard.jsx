@@ -1,138 +1,171 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import NotificationsPanel from '../components/common/NotificationsPanel';
-import { stagiaireApi } from '../services/api';
+import React, { useMemo } from 'react';
+import { BellRing, BookOpenText, ChartNoAxesCombined, Clock4 } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+import { BarChart, ChartCard, LineChart, PieChart } from '../components/charts/SimpleCharts';
+import StatCard from '../components/dashboard/StatCard';
+import { useStagiaireData } from '../hooks/useStagiaireData';
+
+import SectionHeader from '../components/dashboard/SectionHeader';
+import KpiGrid from '../components/dashboard/KpiGrid';
+import { SkeletonCard, SkeletonLine } from '../components/dashboard/LoadingSkeletons';
+import EmptyState from '../components/dashboard/EmptyState';
 
 const StagiaireDashboard = () => {
-  const [notes, setNotes] = useState([]);
-  const [schedule, setSchedule] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
-  const [recommendation, setRecommendation] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      setError('');
-
-      try {
-        const [notesRes, scheduleRes, annRes, recoRes] = await Promise.all([
-          stagiaireApi.notes(),
-          stagiaireApi.schedule(),
-          stagiaireApi.announcements(),
-          stagiaireApi.recommendation(),
-        ]);
-
-        setNotes(Array.isArray(notesRes) ? notesRes : []);
-        setSchedule(Array.isArray(scheduleRes) ? scheduleRes : []);
-        setAnnouncements(Array.isArray(annRes) ? annRes : []);
-        setRecommendation(recoRes);
-      } catch (err) {
-        setError(err?.response?.data?.message || 'Impossible de charger votre espace.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
+  const { notes, scheduleItems, announcements, recommendation, loading, error } = useStagiaireData();
 
   const average = useMemo(() => recommendation?.average ?? 0, [recommendation]);
-  const scheduleItems = schedule.flatMap((entry) =>
-    Array.isArray(entry.fichier)
-      ? entry.fichier.map((slot, index) => ({
-          id: `${entry.id}-${index}`,
-          label: `${slot.jour} ${slot.heure} - ${slot.module}`,
-        }))
-      : []
+
+  const barData = useMemo(
+    () =>
+      notes.length
+        ? notes.map((note) => ({ label: note.module?.nom || 'Module', value: Number(note.note || 0) }))
+        : [
+            { label: 'Algo', value: 13 },
+            { label: 'Web', value: 15 },
+            { label: 'BDD', value: 12 },
+          ],
+    [notes]
   );
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Espace stagiaire</h1>
-        <p className="text-slate-600 dark:text-slate-300 mt-2">
-          Consultez vos notes validees, votre moyenne et les annonces utiles.
-        </p>
+  const lineData = useMemo(() => {
+    const built = notes.map((note, index) => ({
+      label: `Etape ${index + 1}`,
+      value: Number(note.note || 0),
+    }));
+
+    return built.length
+      ? built
+      : [
+          { label: 'S1', value: 11 },
+          { label: 'S2', value: 12.5 },
+          { label: 'S3', value: 14 },
+          { label: 'S4', value: 13.8 },
+        ];
+  }, [notes]);
+
+  const pieData = useMemo(() => {
+    const built = [
+      { label: 'Notes', value: notes.length, color: '#8b5cf6' },
+      { label: 'Creneaux', value: scheduleItems.length, color: '#0ea5e9' },
+      { label: 'Annonces', value: announcements.length, color: '#f97316' },
+    ].filter((item) => item.value > 0);
+
+    return built.length
+      ? built
+      : [
+          { label: 'Notes', value: 4, color: '#8b5cf6' },
+          { label: 'Creneaux', value: 5, color: '#0ea5e9' },
+          { label: 'Annonces', value: 2, color: '#f97316' },
+        ];
+  }, [announcements.length, notes.length, scheduleItems.length]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <SectionHeader
+          eyebrow="ISTA • Student"
+          title="Espace stagiaire"
+          description="Chargement de votre progression et de vos indicateurs…"
+        />
+        <KpiGrid columns="4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </KpiGrid>
+
+        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-3">
+          <SkeletonLine />
+          <SkeletonLine />
+          <SkeletonLine />
+        </div>
       </div>
+    );
+  }
 
-      {loading && <p className="text-slate-500 dark:text-slate-400">Chargement...</p>}
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+  return (
+    <div className="space-y-6">
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+          {error}
+        </div>
+      ) : null}
 
-      {!loading && !error && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 p-5">
-              <p className="text-sm text-slate-500 dark:text-slate-400">Moyenne</p>
-              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{average}/20</p>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="space-y-6"
+      >
+        <SectionHeader
+          eyebrow="ISTA • Stagiaire"
+          title="Tableau de bord"
+          description="Vos notes, votre progression et vos informations importantes—au même endroit."
+          actions={
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/60 px-3 py-2 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-900/30">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Aperçu</span>
             </div>
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 p-5">
-              <p className="text-sm text-slate-500 dark:text-slate-400">Notes validees</p>
-              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{notes.length}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 p-5">
-              <p className="text-sm text-slate-500 dark:text-slate-400">Performance</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
-                {recommendation?.recommendation || 'Aucune recommandation pour le moment.'}
-              </p>
-            </div>
+          }
+        />
+
+        <KpiGrid columns="4">
+          <StatCard
+            label="Moyenne"
+            value={`${average}/20`}
+            helper="Résumé instantané"
+            accent="from-violet-500 to-fuchsia-500"
+            icon={ChartNoAxesCombined}
+          />
+          <StatCard
+            label="Notes validées"
+            value={notes.length}
+            helper="Modules disponibles"
+            accent="from-sky-500 to-cyan-500"
+            icon={BookOpenText}
+          />
+          <StatCard
+            label="Creneaux planifiés"
+            value={scheduleItems.length}
+            helper="Semaine en cours"
+            accent="from-emerald-500 to-teal-500"
+            icon={Clock4}
+          />
+          <StatCard
+            label="Annonces"
+            value={announcements.length}
+            helper="Informations récentes"
+            accent="from-amber-500 to-orange-500"
+            icon={BellRing}
+          />
+        </KpiGrid>
+
+        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-3">
+          <ChartCard title="Notes par module" subtitle="Bar chart de vos résultats">
+            <BarChart data={barData} color="#8b5cf6" />
+          </ChartCard>
+
+          <ChartCard title="Progression récente" subtitle="Line chart de performance">
+            <LineChart data={lineData} stroke="#10b981" fill="rgba(16, 185, 129, 0.14)" />
+          </ChartCard>
+
+          <ChartCard title="Répartition de votre espace" subtitle="Pie chart entre notes, emploi du temps et annonces">
+            <PieChart data={pieData} />
+          </ChartCard>
+        </div>
+
+        {(!error && notes.length === 0 && scheduleItems.length === 0 && announcements.length === 0) ? (
+          <div className="mt-6">
+            <EmptyState
+              title="Aucune donnée pour le moment"
+              description="Dès que vos notes, créneaux et annonces seront disponibles, ils apparaîtront ici."
+            />
           </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 p-5">
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Mes notes validees</h2>
-              {notes.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">Aucune note validee pour le moment.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {notes.map((note) => (
-                    <li key={note.id} className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
-                      <span className="text-sm text-slate-700 dark:text-slate-200">{note.module?.nom || 'Module'}</span>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">{note.note}/20</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 p-5">
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Mon emploi du temps</h2>
-              {scheduleItems.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">Aucun creneau planifie.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {scheduleItems.map((item) => (
-                    <li key={item.id} className="rounded-xl bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
-                      {item.label}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 p-5">
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Annonces</h2>
-              {announcements.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">Aucune annonce.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {announcements.map((item) => (
-                    <li key={item.id} className="rounded-xl bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
-                      {item.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <NotificationsPanel />
-          </div>
-        </>
-      )}
+        ) : null}
+      </motion.div>
     </div>
   );
 };
 
 export default StagiaireDashboard;
+

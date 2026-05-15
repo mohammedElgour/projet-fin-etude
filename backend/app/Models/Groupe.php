@@ -28,7 +28,15 @@ class Groupe extends Model
      */
     public function filier(): BelongsTo
     {
-        return $this->belongsTo(Filier::class);
+        return $this->belongsTo(Filier::class, 'filiere_id');
+    }
+
+    /**
+     * Alias aligned with the database column naming.
+     */
+    public function filiere(): BelongsTo
+    {
+        return $this->filier();
     }
 
     /**
@@ -47,4 +55,3 @@ class Groupe extends Model
         return $this->hasMany(EmploiDuTemps::class);
     }
 }
-

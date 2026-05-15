@@ -13,7 +13,7 @@ import SectionHeader from '../ui/SectionHeader';
 
 const filieres = [
   {
-    title: 'Developpement Digital',
+    title: 'Développement Digital',
     description: 'Conception web, mobile, bases de donnees et projets collaboratifs orientes metier.',
     icon: Cpu,
   },

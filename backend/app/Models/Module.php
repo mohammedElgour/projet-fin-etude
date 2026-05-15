@@ -17,6 +17,7 @@ class Module extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'code',
         'nom',
         'coefficient',
         'filiere_id',
@@ -36,7 +37,15 @@ class Module extends Model
      */
     public function filier(): BelongsTo
     {
-        return $this->belongsTo(Filier::class);
+        return $this->belongsTo(Filier::class, 'filiere_id');
+    }
+
+    /**
+     * Alias aligned with the database column naming.
+     */
+    public function filiere(): BelongsTo
+    {
+        return $this->filier();
     }
 
     /**
@@ -49,4 +58,3 @@ class Module extends Model
 
     protected $table = 'modules';
 }
-

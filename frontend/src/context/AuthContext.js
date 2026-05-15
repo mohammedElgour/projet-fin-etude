@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { setAuthToken } from '../services/api';
+import { setAuthToken, STORAGE_TOKEN_KEY } from '../services/api';
 
 const AuthContext = createContext(null);
 
-const STORAGE_TOKEN_KEY = 'sms_token';
 const STORAGE_USER_KEY = 'sms_user';
 
 const readStoredUser = () => {
@@ -51,6 +50,19 @@ export const AuthProvider = ({ children }) => {
     setToken('');
     setUser(null);
   };
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setToken('');
+      setUser(null);
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
+  }, []);
 
   const value = useMemo(
     () => ({

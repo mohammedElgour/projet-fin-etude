@@ -13,6 +13,14 @@ use Illuminate\Validation\Rule;
 
 class StagiaireController extends Controller
 {
+    private function buildDisplayName(array $validated, ?User $user = null): string
+    {
+        $firstName = $validated['first_name'] ?? $user?->first_name ?? '';
+        $lastName = $validated['last_name'] ?? $user?->last_name ?? '';
+
+        return trim($firstName.' '.$lastName);
+    }
+
     public function index(): JsonResponse
     {
         $stagiaires = Stagiaire::with(['user', 'groupe.filier'])->paginate(15);
@@ -23,16 +31,25 @@ class StagiaireController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['required', 'string', 'max:30'],
+            'address' => ['required', 'string'],
+            'date_of_birth' => ['required', 'date'],
             'password' => ['required', 'string', 'min:8'],
             'groupe_id' => ['required', 'exists:groupes,id'],
         ]);
 
         $result = DB::transaction(function () use ($validated) {
             $user = User::create([
-                'name' => $validated['name'],
+                'name' => $this->buildDisplayName($validated),
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'],
                 'email' => $validated['email'],
+                'phone' => $validated['phone'],
+                'address' => $validated['address'],
+                'date_of_birth' => $validated['date_of_birth'],
                 'password' => Hash::make($validated['password']),
                 'role' => 'stagiaire',
             ]);
@@ -58,7 +75,8 @@ class StagiaireController extends Controller
     public function update(Request $request, Stagiaire $stagiaire): JsonResponse
     {
         $validated = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'first_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'last_name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => [
                 'sometimes',
                 'required',
@@ -66,20 +84,28 @@ class StagiaireController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->ignore($stagiaire->user_id),
             ],
+            'phone' => ['sometimes', 'required', 'string', 'max:30'],
+            'address' => ['sometimes', 'required', 'string'],
+            'date_of_birth' => ['sometimes', 'required', 'date'],
             'password' => ['nullable', 'string', 'min:8'],
             'groupe_id' => ['sometimes', 'required', 'exists:groupes,id'],
         ]);
 
         DB::transaction(function () use ($validated, $stagiaire) {
             $userData = [];
-            if (array_key_exists('name', $validated)) {
-                $userData['name'] = $validated['name'];
+
+            foreach (['first_name', 'last_name', 'email', 'phone', 'address', 'date_of_birth'] as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $userData[$field] = $validated[$field];
+                }
             }
-            if (array_key_exists('email', $validated)) {
-                $userData['email'] = $validated['email'];
-            }
+
             if (!empty($validated['password'])) {
                 $userData['password'] = Hash::make($validated['password']);
+            }
+
+            if (array_key_exists('first_name', $userData) || array_key_exists('last_name', $userData)) {
+                $userData['name'] = $this->buildDisplayName($validated, $stagiaire->user);
             }
 
             if (!empty($userData)) {

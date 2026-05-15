@@ -16,7 +16,7 @@ const columns = [
   },
   {
     title: 'Filieres',
-    links: ['Developpement Digital', 'Gestion', 'Reseaux'],
+    links: ['Développement Digital', 'Gestion', 'Reseaux'],
   },
   {
     title: 'Liens utiles',
