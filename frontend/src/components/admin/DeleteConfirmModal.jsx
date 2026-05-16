@@ -38,7 +38,7 @@ const DeleteConfirmModal = ({
           initial="hidden"
           animate="visible"
           exit="exit"
-          className="w-full max-w-md rounded-[28px] border border-white/60 bg-white/95 p-6 shadow-2xl shadow-slate-950/15 dark:border-white/10 dark:bg-slate-950/95"
+          className="surface-panel w-full max-w-md rounded-[28px] p-6"
         >
           <div className="mb-5 flex items-start gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300">

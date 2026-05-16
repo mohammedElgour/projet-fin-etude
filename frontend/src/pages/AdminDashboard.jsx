@@ -1,111 +1,115 @@
 import React, { useMemo } from 'react';
-import { AlertTriangle, PieChart as PieChartIcon, Trophy, TrendingUp, Users } from 'lucide-react';
-import { BarChart, LineChart, PieChart } from '../components/charts/SimpleCharts';
+import { FolderKanban, GraduationCap, PieChart as PieChartIcon, School, UserCog, Users } from 'lucide-react';
+import { BarChart, LineChart } from '../components/charts/SimpleCharts';
 import StatCard from '../components/dashboard/StatCard';
 import ChartCard from '../components/dashboard/ChartCard';
+import GroupesParFiliereCard from '../components/dashboard/GroupesParFiliereCard';
 import { useAdminDashboardData } from '../hooks/useAdminData';
 import { motion } from 'framer-motion';
 import SectionHeader from '../components/dashboard/SectionHeader';
 
-const pct = (v) => `${Number(v ?? 0).toFixed(0)}%`;
-
-const safePercentChange = (v) => {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return 0;
-  return n;
+const safeNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const chartColors = ['#0ea5e9', '#8b5cf6', '#f97316', '#10b981', '#06b6d4', '#a78bfa'];
+
+const EmptyChartState = ({ message }) => (
+  <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/70 px-4 text-center text-sm text-slate-500">
+    {message}
+  </div>
+);
 
 const AdminDashboard = () => {
   const { stats, error, loading } = useAdminDashboardData();
-  const kpis = stats?.kpis || {};
-  const charts = stats?.charts || {};
+  const kpis = useMemo(() => stats?.kpis || {}, [stats]);
+  const charts = useMemo(() => stats?.charts || {}, [stats]);
 
-  const lowestModules = Array.isArray(charts.lowest_modules) ? charts.lowest_modules : [];
-  const resultsEvolution = Array.isArray(charts.results_evolution) ? charts.results_evolution : [];
-  const performanceByFiliere = Array.isArray(charts.performance_by_filiere) ? charts.performance_by_filiere : [];
-  const topStudents = Array.isArray(charts.top_students) ? charts.top_students : [];
+  const groupesPerFiliere = useMemo(
+    () => (Array.isArray(charts.groupes_per_filiere) ? charts.groupes_per_filiere : []),
+    [charts]
+  );
+  const stagiairesPerGroupe = useMemo(
+    () => (Array.isArray(charts.stagiaires_per_groupe) ? charts.stagiaires_per_groupe : []),
+    [charts]
+  );
+  const modulesDistribution = useMemo(
+    () => (Array.isArray(charts.modules_distribution) ? charts.modules_distribution : []),
+    [charts]
+  );
+  const recentGrowth = useMemo(
+    () => (Array.isArray(charts.recent_growth) ? charts.recent_growth : []),
+    [charts]
+  );
 
-  const lineData = useMemo(() => {
-    if (resultsEvolution.length) {
-      return resultsEvolution.map((item) => ({
-        label: item.period,
-        value: Number(item.average_note || 0),
-      }));
-    }
+  const lineData = useMemo(
+    () =>
+      recentGrowth.map((item) => ({
+        label: item.label || item.period || '-',
+        value: safeNumber(item.total),
+      })),
+    [recentGrowth]
+  );
 
-    return [
-      { label: 'Jan', value: 11.5 },
-      { label: 'Fev', value: 12.2 },
-      { label: 'Mar', value: 13.4 },
-      { label: 'Avr', value: 14.1 },
-    ];
-  }, [resultsEvolution]);
+  const barData = useMemo(
+    () =>
+      stagiairesPerGroupe.map((group) => ({
+        label: group.nom || 'Groupe',
+        value: safeNumber(group.stagiaires_count),
+      })),
+    [stagiairesPerGroupe]
+  );
 
-  const barData = useMemo(() => {
-    if (lowestModules.length) {
-      return lowestModules.map((m) => ({ label: m.nom, value: Number(m.average_note || 0) }));
-    }
+  const pieData = useMemo(
+    () =>
+      groupesPerFiliere.map((item, index) => ({
+        label: item.nom || 'Filiere',
+        value: safeNumber(item.groupes_count),
+        color: chartColors[index % chartColors.length],
+      })),
+    [groupesPerFiliere]
+  );
 
-    return [
-      { label: 'Module 1', value: 12 },
-      { label: 'Module 2', value: 15 },
-      { label: 'Module 3', value: 11 },
-    ];
-  }, [lowestModules]);
-
-  const pieData = useMemo(() => {
-    const colors = ['#0ea5e9', '#8b5cf6', '#f97316', '#10b981', '#06b6d4', '#a78bfa'];
-
-    if (performanceByFiliere.length) {
-      return performanceByFiliere.slice(0, 5).map((item, idx) => ({
-        label: item.nom,
-        value: Math.max(Number(item.average_note || 0), 1),
-        color: colors[idx % colors.length],
-      }));
-    }
-
-    return [
-      { label: 'Dev', value: 35, color: '#0ea5e9' },
-      { label: 'Gestion', value: 25, color: '#8b5cf6' },
-      { label: 'Reseaux', value: 20, color: '#f97316' },
-      { label: 'Design', value: 20, color: '#10b981' },
-    ];
-  }, [performanceByFiliere]);
+  const modulesTotal = useMemo(
+    () => modulesDistribution.reduce((total, item) => total + safeNumber(item.modules_count), 0),
+    [modulesDistribution]
+  );
 
   const kpiData = useMemo(() => {
-    const totalStudents = Number(kpis.stagiaires ?? 0);
-    const successRate = Number(kpis.success_rate ?? 0);
-
-    const topPerformersCount = (() => {
-      const n = Array.isArray(topStudents) ? Math.min(topStudents.length, 4) : 0;
-      return n * 10 || 40;
-    })();
-
-    const difficultModulesCount = lowestModules.length;
-
-    const successChange = safePercentChange(kpis.success_rate_change);
-    const studentsChange = safePercentChange(kpis.stagiaires_change);
-    const performersChange = safePercentChange(kpis.top_performers_change);
-    const modulesChange = safePercentChange(kpis.difficult_modules_change);
+    const changes = kpis.changes || {};
 
     return {
-      totalStudents,
-      successRateText: pct(successRate),
-      topPerformersCount,
-      difficultModulesCount,
+      totalStudents: safeNumber(kpis.stagiaires),
+      totalFilieres: safeNumber(kpis.filieres),
+      totalGroupes: safeNumber(kpis.groupes),
+      totalProfesseurs: safeNumber(kpis.professeurs),
+      totalModules: safeNumber(kpis.modules),
       changes: {
-        students: studentsChange || 6.2,
-        success: successChange || 2.8,
-        performers: performersChange || 4.5,
-        modules: modulesChange || -3.1,
+        students: safeNumber(changes.stagiaires),
+        filieres: safeNumber(changes.filieres),
+        groupes: safeNumber(changes.groupes),
+        professeurs: safeNumber(changes.professeurs),
+        modules: safeNumber(changes.modules),
       },
     };
-  }, [kpis, lowestModules.length, topStudents]);
+  }, [kpis]);
+
+  const sparklineSeries = useMemo(
+    () => ({
+      students: recentGrowth.map((item) => safeNumber(item.stagiaires)),
+      teachers: recentGrowth.map((item) => safeNumber(item.professeurs)),
+      modules: recentGrowth.map((item) => safeNumber(item.modules)),
+      groupes: recentGrowth.map((item) => safeNumber(item.groupes)),
+      filieres: recentGrowth.map((item) => safeNumber(item.filieres)),
+    }),
+    [recentGrowth]
+  );
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <SectionHeader eyebrow="Dashboard" title="Espace directeur" description="Chargement des indicateurs…" />
+        <SectionHeader eyebrow="Dashboard" title="Espace directeur" description="Chargement des indicateurs..." />
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 2xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="h-[120px] animate-pulse rounded-xl bg-white ring-1 ring-slate-200/60" />
@@ -139,62 +143,81 @@ const AdminDashboard = () => {
         description="Vue SaaS premium: indicateurs, performance & actions rapides."
       />
 
-      {/* KPI GRID */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 2xl:grid-cols-5">
         <StatCard
           label="Total Students"
           value={kpiData.totalStudents}
           icon={Users}
-          accent="from-sky-500 to-cyan-500"
+          accent="from-sky-500 via-blue-500 to-cyan-500"
           change={kpiData.changes.students}
+          sparklineData={sparklineSeries.students}
         />
         <StatCard
-          label="Success Rate"
-          value={kpiData.successRateText}
-          icon={TrendingUp}
-          accent="from-emerald-500 to-teal-500"
-          change={kpiData.changes.success}
+          label="Total Teachers"
+          value={kpiData.totalProfesseurs}
+          icon={UserCog}
+          accent="from-violet-500 via-fuchsia-500 to-purple-500"
+          change={kpiData.changes.professeurs}
+          sparklineData={sparklineSeries.teachers}
         />
         <StatCard
-          label="Top Performers"
-          value={kpiData.topPerformersCount}
-          icon={Trophy}
-          accent="from-violet-500 to-fuchsia-500"
-          change={kpiData.changes.performers}
-        />
-        <StatCard
-          label="Difficult Modules"
-          value={kpiData.difficultModulesCount}
-          icon={AlertTriangle}
-          accent="from-rose-500 to-orange-500"
+          label="Total Modules"
+          value={kpiData.totalModules}
+          icon={FolderKanban}
+          accent="from-emerald-500 via-teal-500 to-cyan-500"
           change={kpiData.changes.modules}
+          sparklineData={sparklineSeries.modules}
+        />
+        <StatCard
+          label="Total Filieres"
+          value={kpiData.totalFilieres}
+          icon={GraduationCap}
+          accent="from-cyan-500 via-sky-500 to-blue-500"
+          change={kpiData.changes.filieres}
+          sparklineData={sparklineSeries.filieres}
+        />
+        <StatCard
+          label="Total Groupes"
+          value={kpiData.totalGroupes}
+          icon={School}
+          accent="from-orange-500 via-amber-500 to-yellow-400"
+          change={kpiData.changes.groupes}
+          sparklineData={sparklineSeries.groupes}
         />
       </div>
 
-      {/* CHARTS SECTION */}
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
-        <ChartCard title="Performance Trend" subtitle="Évolution des notes moyennes">
+        <ChartCard title="Recent Growth" subtitle="Creations mensuelles sur les 6 derniers mois">
           <div className="rounded-xl bg-slate-50 p-2 ring-1 ring-slate-200/60">
-            <LineChart data={lineData} stroke="#0ea5e9" fill="rgba(14, 165, 233, 0.14)" />
+            {lineData.length ? (
+              <LineChart data={lineData} stroke="#0ea5e9" fill="rgba(14, 165, 233, 0.14)" />
+            ) : (
+              <EmptyChartState message="Aucune creation recente a afficher pour le moment." />
+            )}
           </div>
         </ChartCard>
 
-        <ChartCard title="Grade Distribution" subtitle="Moyennes par module (surveillance)">
+        <ChartCard title="Students Per Groupe" subtitle="Effectif stagiaires par groupe">
           <div className="rounded-xl bg-slate-50 p-2 ring-1 ring-slate-200/60">
-            <BarChart data={barData} color="#8b5cf6" />
+            {barData.length ? (
+              <BarChart data={barData} color="#8b5cf6" />
+            ) : (
+              <EmptyChartState message="Aucun groupe disponible pour afficher les effectifs." />
+            )}
           </div>
         </ChartCard>
       </div>
 
-      {/* BOTTOM SECTION */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <ChartCard title="Module Performance" subtitle="Répartition par filière">
-          <div className="rounded-xl bg-slate-50 p-2 ring-1 ring-slate-200/60">
-            <PieChart data={pieData} />
-          </div>
-        </ChartCard>
-
         <div className="xl:col-span-2">
+          <GroupesParFiliereCard
+            title="Groupes Par Filiere"
+            subtitle={`Distribution dynamique des groupes par filiere${modulesTotal ? `, ${modulesTotal} modules rattaches` : ''}`}
+            data={pieData}
+          />
+        </div>
+
+        <div>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
             <button
               type="button"
@@ -203,7 +226,7 @@ const AdminDashboard = () => {
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-100 text-sky-700 transition group-hover:bg-sky-200">
-                  <span className="text-lg">✓</span>
+                  <span className="text-sm font-semibold">OK</span>
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-slate-900">Validate Grades</p>
@@ -219,7 +242,7 @@ const AdminDashboard = () => {
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 transition group-hover:bg-emerald-200">
-                  <span className="text-lg">👥</span>
+                  <Users className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-slate-900">Manage Students</p>

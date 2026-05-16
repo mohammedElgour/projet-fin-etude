@@ -391,23 +391,22 @@ const SidebarContent = ({
   return (
     <div
       className={clsx(
-        'flex h-full flex-col rounded-[30px] border border-slate-200/70 bg-white p-4 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.28)]',
-        'dark:border-slate-800 dark:bg-slate-950',
+        'surface-panel flex h-full flex-col rounded-[30px] p-4',
         collapsed && !mobile ? 'px-3' : 'px-4'
       )}
     >
       <div
         className={clsx(
-          'flex border-b border-slate-100 pb-4 dark:border-slate-800',
+        'flex border-b border-slate-200/60 pb-4 dark:border-white/10',
           collapsed && !mobile ? 'justify-center' : 'justify-end'
         )}
       >
-        <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200/70 bg-slate-50/75 p-1.5 dark:border-slate-800 dark:bg-slate-900/70">
+        <div className="flex items-center gap-1.5 rounded-2xl border border-white/80 bg-white/70 p-1.5 shadow-[0_14px_24px_-18px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-slate-900/70">
           {!mobile && (
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-500 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-900 dark:hover:text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/80 bg-white text-slate-500 transition-all duration-200 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-white/15 dark:hover:bg-slate-900 dark:hover:text-white"
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               <ChevronLeft className={clsx('h-4 w-4 transition-transform duration-200', collapsed && 'rotate-180')} />
@@ -481,7 +480,7 @@ const DashboardLayout = ({ role, actions }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] dark:bg-slate-950">
+    <div className="min-h-screen">
       <div className="mx-auto flex min-h-screen w-full max-w-[1680px] gap-4 px-4 py-4 sm:gap-5 sm:px-6 lg:gap-6 lg:px-8">
         <aside
           className={clsx(
@@ -497,7 +496,7 @@ const DashboardLayout = ({ role, actions }) => {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="mb-4 flex items-center gap-3 rounded-[26px] border border-slate-200/80 bg-white px-4 py-3 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.18)] lg:hidden">
+          <div className="surface-panel mb-4 flex items-center gap-3 rounded-[26px] px-4 py-3 lg:hidden">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -512,7 +511,9 @@ const DashboardLayout = ({ role, actions }) => {
             </div>
           </div>
 
-          <header className="rounded-[32px] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_20px_55px_-30px_rgba(15,23,42,0.2)] sm:px-6 sm:py-6">
+          <header className="surface-panel relative overflow-hidden rounded-[32px] px-5 py-5 sm:px-6 sm:py-6">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.12),transparent_26%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.16),transparent_26%)]" />
+            <div className="relative">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="max-w-3xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.32em] text-sky-600 dark:text-sky-400">{pageMeta?.eyebrow || 'Dashboard'}</p>
@@ -524,7 +525,7 @@ const DashboardLayout = ({ role, actions }) => {
                 <button
                   type="button"
                   onClick={() => navigate(alertRouteByRole[role] || baseRouteByRole[role])}
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/80 bg-white/80 text-slate-600 shadow-[0_14px_30px_-20px_rgba(15,23,42,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
                   aria-label="Notifications"
                 >
                   <Bell className="h-5 w-5" />
@@ -533,7 +534,7 @@ const DashboardLayout = ({ role, actions }) => {
                 <button
                   type="button"
                   onClick={toggleTheme}
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/80 bg-white/80 text-slate-600 shadow-[0_14px_30px_-20px_rgba(15,23,42,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
                   aria-label="Changer le theme"
                 >
                   {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -543,7 +544,7 @@ const DashboardLayout = ({ role, actions }) => {
                   <button
                     type="button"
                     onClick={() => setProfileMenuOpen((open) => !open)}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-[#f8fafc] px-3 py-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900"
+                    className="flex items-center gap-3 rounded-2xl border border-white/80 bg-white/80 px-3 py-2.5 shadow-[0_14px_30px_-20px_rgba(15,23,42,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white dark:border-white/10 dark:bg-slate-900"
                     aria-label="Open profile menu"
                   >
                     <div className={clsx('flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br text-sm font-semibold text-white', config.accent)}>
@@ -563,7 +564,7 @@ const DashboardLayout = ({ role, actions }) => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 8 }}
                         transition={{ duration: 0.18 }}
-                        className="absolute right-0 top-[calc(100%+0.75rem)] z-30 w-60 rounded-3xl border border-slate-200 bg-white p-2 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.3)] dark:border-slate-800 dark:bg-slate-950"
+                        className="surface-panel absolute right-0 top-[calc(100%+0.75rem)] z-30 w-60 rounded-3xl p-2"
                       >
                         <button
                           type="button"
@@ -596,6 +597,7 @@ const DashboardLayout = ({ role, actions }) => {
 
                 {actions ? <div className="flex items-center gap-3">{actions}</div> : null}
               </div>
+            </div>
             </div>
           </header>
 

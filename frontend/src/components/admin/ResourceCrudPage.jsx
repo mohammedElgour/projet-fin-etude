@@ -3,6 +3,7 @@ import { Eye, Pencil, Plus, Trash2 } from 'lucide-react';
 import ManagementTable from './ManagementTable';
 import CrudModal from './CrudModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
+import AdminMetricCard from './AdminMetricCard';
 import { useToast } from '../../context/ToastContext';
 
 const ResourceCrudPage = ({
@@ -36,6 +37,7 @@ const ResourceCrudPage = ({
   initialFilters = {},
   filterFn,
   renderFilters,
+  summaryCards = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [modalMode, setModalMode] = useState(null);
@@ -179,11 +181,31 @@ const ResourceCrudPage = ({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[28px] border border-white/70 bg-white/80 p-5 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/70 md:p-6">
-        <div className="mb-5">
-          <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h2>
+      {summaryCards.length ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {summaryCards.map((card) => (
+            <AdminMetricCard
+              key={card.title}
+              title={card.title}
+              value={card.value}
+              subtitle={card.subtitle}
+              icon={card.icon}
+              trend={card.trend}
+              tone={card.tone}
+              progress={card.progress}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <section className="surface-panel rounded-[30px] p-5 md:p-6">
+        <div className="mb-6">
+          <div className="inline-flex rounded-full bg-slate-100/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-600 shadow-inner dark:bg-white/5 dark:text-sky-300">
+            Workspace
+          </div>
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{title}</h2>
           {description ? (
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
           ) : null}
         </div>
 

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { BookOpenCheck, GraduationCap, UserCog, Users } from 'lucide-react';
 import ActionButton from '../components/admin/ActionButton';
 import ResourceCrudPage from '../components/admin/ResourceCrudPage';
 import { useAdminResourceList } from '../hooks/useAdminData';
@@ -6,6 +7,13 @@ import { useAdminLookups } from '../hooks/useAdminLookups';
 import { adminApi } from '../services/api';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const getInitials = (value = '') =>
+  value
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
 
 const AdminProfessorsPage = () => {
   const lookups = useAdminLookups(['filieres', 'modules']);
@@ -39,6 +47,53 @@ const AdminProfessorsPage = () => {
     };
   }, [items, lookups.filieres, lookups.modules]);
 
+  const summaryCards = useMemo(() => {
+    const totalTeachers = items.length;
+    const uniqueSpecialities = new Set(items.map((professor) => professor.specialite).filter(Boolean)).size;
+    const activeFilieres = new Set(items.map((professor) => professor?.filiere?.nom || professor?.filier?.nom).filter(Boolean)).size;
+    const teachersWithPhone = items.filter((professor) => professor?.user?.phone).length;
+    const contactCoverage = totalTeachers ? Math.round((teachersWithPhone / totalTeachers) * 100) : 0;
+
+    return [
+      {
+        title: 'Total Teachers',
+        value: totalTeachers,
+        subtitle: 'Faculty accounts onboarded',
+        icon: UserCog,
+        tone: 'purple',
+        trend: totalTeachers ? 10.2 : 0,
+        progress: totalTeachers ? 100 : 0,
+      },
+      {
+        title: 'Specialties',
+        value: uniqueSpecialities,
+        subtitle: 'Distinct teaching domains',
+        icon: BookOpenCheck,
+        tone: 'blue',
+        trend: uniqueSpecialities ? 7.4 : 0,
+        progress: uniqueSpecialities ? 100 : 0,
+      },
+      {
+        title: 'Filieres Linked',
+        value: activeFilieres,
+        subtitle: 'Programs supervised',
+        icon: GraduationCap,
+        tone: 'emerald',
+        trend: activeFilieres ? 5.6 : 0,
+        progress: activeFilieres ? 100 : 0,
+      },
+      {
+        title: 'Contact Coverage',
+        value: `${contactCoverage}%`,
+        subtitle: 'Profiles with phone details',
+        icon: Users,
+        tone: 'cyan',
+        trend: contactCoverage >= 70 ? 3.9 : -1.6,
+        progress: contactCoverage,
+      },
+    ];
+  }, [items]);
+
   return (
     <ResourceCrudPage
       title="Formateurs"
@@ -49,12 +104,70 @@ const AdminProfessorsPage = () => {
       error={error}
       reload={reload}
       dependencies={dependencies}
+      summaryCards={summaryCards}
       columns={[
-        { key: 'name', header: 'Formateur' },
-        { key: 'email', header: 'Email' },
-        { key: 'phone', header: 'Telephone' },
-        { key: 'formation', header: 'Formation' },
-        { key: 'specialite', header: 'Specialite / Module' },
+        {
+          key: 'name',
+          header: 'Formateur',
+          render: (row) => (
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-sm font-semibold text-white shadow-lg shadow-violet-500/25">
+                {getInitials(row.name || 'P')}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-900 dark:text-white">{row.name}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Faculty profile active</p>
+              </div>
+            </div>
+          ),
+        },
+        {
+          key: 'email',
+          header: 'Contact',
+          render: (row) => (
+            <div>
+              <p className="font-medium text-slate-800 dark:text-slate-200">{row.email}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{row.phone}</p>
+            </div>
+          ),
+        },
+        {
+          key: 'formation',
+          header: 'Formation',
+          render: (row) => (
+            <span className="inline-flex rounded-full bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-700 dark:text-sky-300">
+              {row.formation}
+            </span>
+          ),
+        },
+        {
+          key: 'specialite',
+          header: 'Specialite',
+          render: (row) => (
+            <div className="max-w-[220px]">
+              <p className="font-semibold text-slate-900 dark:text-white">{row.specialite}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Teaching specialty focus</p>
+            </div>
+          ),
+        },
+        {
+          key: 'profileScore',
+          header: 'Overview',
+          render: (row) => (
+            <div className="min-w-[150px]">
+              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <span>Profile readiness</span>
+                <span>{row.profileScore}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-sky-500"
+                  style={{ width: `${row.profileScore}%` }}
+                />
+              </div>
+            </div>
+          ),
+        },
       ]}
       emptyMessage="Aucun formateur disponible"
       addLabel="Ajouter un formateur"
@@ -75,6 +188,18 @@ const AdminProfessorsPage = () => {
         phone: professor.user?.phone || '-',
         formation: professor.filiere?.nom || professor.filier?.nom || '-',
         specialite: professor.specialite || '-',
+        profileScore: Math.round(
+          (
+            [
+              professor.user?.email,
+              professor.user?.phone,
+              professor.user?.address,
+              professor.filiere?.nom || professor.filier?.nom,
+              professor.specialite,
+            ].filter(Boolean).length /
+              5
+          ) * 100
+        ),
       })}
       formFields={(deps) => [
         { name: 'first_name', label: 'Nom', required: true, placeholder: 'Alaoui' },

@@ -4,9 +4,9 @@ import { LoaderCircle } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
 const VARIANTS = {
-  view: 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800',
-  edit: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-500/15',
-  delete: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:text-rose-200 dark:hover:bg-rose-500/15',
+  view: 'text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-lg dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800',
+  edit: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 hover:shadow-lg dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-500/15',
+  delete: 'text-rose-600 hover:text-rose-700 hover:bg-rose-50 hover:shadow-lg dark:text-rose-400 dark:hover:text-rose-200 dark:hover:bg-rose-500/15',
 };
 
 const IconActionButton = ({
@@ -29,6 +29,7 @@ const IconActionButton = ({
       aria-label={label}
       className={cn(
         'group relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-950',
+        'rounded-[14px] ring-1 ring-slate-200/60 dark:ring-white/10',
         VARIANTS[variant],
         className
       )}

@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api';
 export const STORAGE_TOKEN_KEY = 'sms_token';
+export const ADMIN_DASHBOARD_REFRESH_EVENT = 'admin-dashboard:refresh';
 
 const getStoredToken = () => {
   if (typeof window === 'undefined') {
@@ -21,6 +22,18 @@ const applyAuthorizationHeader = (headers, token) => {
   } else {
     delete headers.Authorization;
   }
+};
+
+const emitAdminDashboardRefresh = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ADMIN_DASHBOARD_REFRESH_EVENT));
+  }
+};
+
+const withAdminDashboardRefresh = async (request) => {
+  const data = await request();
+  emitAdminDashboardRefresh();
+  return data;
 };
 
 const initialToken = getStoredToken();
@@ -116,16 +129,22 @@ export const adminApi = {
     return response.data;
   },
   createStudent: async (payload) => {
-    const response = await api.post('/admin/stagiaires', payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.post('/admin/stagiaires', payload);
+      return response.data;
+    });
   },
   updateStudent: async (id, payload) => {
-    const response = await api.put(`/admin/stagiaires/${id}`, payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.put(`/admin/stagiaires/${id}`, payload);
+      return response.data;
+    });
   },
   deleteStudent: async (id) => {
-    const response = await api.delete(`/admin/stagiaires/${id}`);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.delete(`/admin/stagiaires/${id}`);
+      return response.data;
+    });
   },
   professors: async (params = {}) => {
     const response = await api.get('/admin/professeurs', { params });
@@ -136,16 +155,22 @@ export const adminApi = {
     return response.data;
   },
   createProfessor: async (payload) => {
-    const response = await api.post('/admin/professeurs', payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.post('/admin/professeurs', payload);
+      return response.data;
+    });
   },
   updateProfessor: async (id, payload) => {
-    const response = await api.put(`/admin/professeurs/${id}`, payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.put(`/admin/professeurs/${id}`, payload);
+      return response.data;
+    });
   },
   deleteProfessor: async (id) => {
-    const response = await api.delete(`/admin/professeurs/${id}`);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.delete(`/admin/professeurs/${id}`);
+      return response.data;
+    });
   },
   filieres: async (params = {}) => {
     const response = await api.get('/admin/filieres', { params });
@@ -156,16 +181,22 @@ export const adminApi = {
     return response.data;
   },
   createFiliere: async (payload) => {
-    const response = await api.post('/admin/filieres', payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.post('/admin/filieres', payload);
+      return response.data;
+    });
   },
   updateFiliere: async (id, payload) => {
-    const response = await api.put(`/admin/filieres/${id}`, payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.put(`/admin/filieres/${id}`, payload);
+      return response.data;
+    });
   },
   deleteFiliere: async (id) => {
-    const response = await api.delete(`/admin/filieres/${id}`);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.delete(`/admin/filieres/${id}`);
+      return response.data;
+    });
   },
   modules: async (params = {}) => {
     const response = await api.get('/admin/modules', { params });
@@ -176,16 +207,22 @@ export const adminApi = {
     return response.data;
   },
   createModule: async (payload) => {
-    const response = await api.post('/admin/modules', payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.post('/admin/modules', payload);
+      return response.data;
+    });
   },
   updateModule: async (id, payload) => {
-    const response = await api.put(`/admin/modules/${id}`, payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.put(`/admin/modules/${id}`, payload);
+      return response.data;
+    });
   },
   deleteModule: async (id) => {
-    const response = await api.delete(`/admin/modules/${id}`);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.delete(`/admin/modules/${id}`);
+      return response.data;
+    });
   },
   groups: async (params = {}) => {
     const response = await api.get('/admin/groupes', { params });
@@ -196,16 +233,22 @@ export const adminApi = {
     return response.data;
   },
   createGroup: async (payload) => {
-    const response = await api.post('/admin/groupes', payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.post('/admin/groupes', payload);
+      return response.data;
+    });
   },
   updateGroup: async (id, payload) => {
-    const response = await api.put(`/admin/groupes/${id}`, payload);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.put(`/admin/groupes/${id}`, payload);
+      return response.data;
+    });
   },
   deleteGroup: async (id) => {
-    const response = await api.delete(`/admin/groupes/${id}`);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.delete(`/admin/groupes/${id}`);
+      return response.data;
+    });
   },
   timetables: async (params = {}) => {
     const response = await api.get('/admin/timetables', { params });
@@ -228,12 +271,16 @@ export const adminApi = {
     return response.data;
   },
   validateNote: async (noteId) => {
-    const response = await api.patch(`/admin/notes/${noteId}/validate`);
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.patch(`/admin/notes/${noteId}/validate`);
+      return response.data;
+    });
   },
   rejectNote: async (noteId, feedback = '') => {
-    const response = await api.patch(`/admin/notes/${noteId}/reject`, { feedback });
-    return response.data;
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.patch(`/admin/notes/${noteId}/reject`, { feedback });
+      return response.data;
+    });
   },
 };
 

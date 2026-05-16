@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { adminApi } from '../services/api';
+import { ADMIN_DASHBOARD_REFRESH_EVENT, adminApi } from '../services/api';
 import { normalizeCollectionResponse } from '../lib/normalizeCollectionResponse';
 
 const getRequestErrorMessage = (err, fallbackError) => {
@@ -15,8 +15,14 @@ export const useAdminDashboardData = () => {
   const [pendingNotes, setPendingNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const loadingRef = useRef(false);
 
   const loadData = useCallback(async () => {
+    if (loadingRef.current) {
+      return;
+    }
+
+    loadingRef.current = true;
     setLoading(true);
     setError('');
 
@@ -31,12 +37,25 @@ export const useAdminDashboardData = () => {
     } catch (err) {
       setError(err?.response?.data?.message || 'Impossible de charger le tableau de bord admin.');
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      loadData();
+    };
+
+    window.addEventListener(ADMIN_DASHBOARD_REFRESH_EVENT, handleRefresh);
+
+    return () => {
+      window.removeEventListener(ADMIN_DASHBOARD_REFRESH_EVENT, handleRefresh);
+    };
   }, [loadData]);
 
   return {
