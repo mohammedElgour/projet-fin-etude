@@ -27,6 +27,7 @@ const SIZES = {
 const ActionButton = ({
   children,
   icon: Icon,
+  as,
   variant = 'primary',
   size = 'md',
   loading = false,
@@ -36,13 +37,21 @@ const ActionButton = ({
   ...props
 }) => {
   const isDisabled = disabled || loading;
+  const Component = as || motion.button;
+  const motionProps =
+    Component === motion.button
+      ? {
+          whileHover: !isDisabled ? { y: -1, scale: 1.01 } : undefined,
+          whileTap: !isDisabled ? { scale: 0.99 } : undefined,
+        }
+      : {};
 
   return (
-    <motion.button
-      whileHover={isDisabled ? undefined : { y: -1, scale: 1.01 }}
-      whileTap={isDisabled ? undefined : { scale: 0.99 }}
-      type={type}
-      disabled={isDisabled}
+    <Component
+      {...motionProps}
+      type={Component === motion.button ? type : undefined}
+      disabled={Component === motion.button ? isDisabled : undefined}
+      aria-disabled={Component !== motion.button ? isDisabled : undefined}
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-950',
         VARIANTS[variant],
@@ -57,7 +66,7 @@ const ActionButton = ({
         <Icon className="h-4 w-4" />
       ) : null}
       <span>{children}</span>
-    </motion.button>
+    </Component>
   );
 };
 

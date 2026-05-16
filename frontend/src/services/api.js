@@ -207,6 +207,22 @@ export const adminApi = {
     const response = await api.delete(`/admin/groupes/${id}`);
     return response.data;
   },
+  timetables: async (params = {}) => {
+    const response = await api.get('/admin/timetables', { params });
+    return response.data;
+  },
+  timetable: async (id) => {
+    const response = await api.get(`/admin/timetables/${id}`);
+    return response.data;
+  },
+  createTimetable: async (payload) => {
+    const response = await api.post('/admin/timetables', payload, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
   pendingNotes: async () => {
     const response = await api.get('/admin/notes/pending');
     return response.data;
@@ -246,6 +262,10 @@ export const professeurApi = {
     const response = await api.get('/professeur/schedule', { params });
     return response.data;
   },
+  timetables: async (params = {}) => {
+    const response = await api.get('/professeur/timetables', { params });
+    return response.data;
+  },
 };
 
 export const stagiaireApi = {
@@ -255,6 +275,10 @@ export const stagiaireApi = {
   },
   schedule: async () => {
     const response = await api.get('/stagiaire/schedule');
+    return response.data;
+  },
+  timetables: async () => {
+    const response = await api.get('/stagiaire/timetables');
     return response.data;
   },
   announcements: async () => {

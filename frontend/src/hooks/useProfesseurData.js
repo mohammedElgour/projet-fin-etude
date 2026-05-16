@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { professeurApi } from '../services/api';
+import { normalizeCollectionResponse } from '../lib/normalizeCollectionResponse';
 
 export const useProfesseurData = () => {
   const [catalog, setCatalog] = useState({ groupes: [], modules: [] });
   const [students, setStudents] = useState([]);
   const [schedule, setSchedule] = useState([]);
+  const [timetables, setTimetables] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
   const [selectedModule, setSelectedModule] = useState('');
   const [loading, setLoading] = useState(true);
@@ -15,18 +17,20 @@ export const useProfesseurData = () => {
     setError('');
 
     try {
-      const [catalogRes, studentsRes, scheduleRes] = await Promise.all([
+      const [catalogRes, studentsRes, scheduleRes, timetablesRes] = await Promise.all([
         professeurApi.catalog(),
         professeurApi.students({
           ...(groupId ? { groupe_id: groupId } : {}),
           ...(moduleId ? { module_id: moduleId } : {}),
         }),
         professeurApi.schedule(groupId ? { groupe_id: groupId } : {}),
+        professeurApi.timetables(),
       ]);
 
       setCatalog(catalogRes);
       setStudents(studentsRes?.data || []);
       setSchedule(scheduleRes?.data || []);
+      setTimetables(normalizeCollectionResponse(timetablesRes));
     } catch (err) {
       setError(err?.response?.data?.message || 'Impossible de charger les donnees professeur.');
     } finally {
@@ -74,10 +78,32 @@ export const useProfesseurData = () => {
     [schedule]
   );
 
+  const timetableItems = useMemo(
+    () =>
+      timetables.map((timetable) => ({
+        id: timetable.id,
+        title: timetable.title || 'Emploi du temps',
+        imageUrl: timetable.image_url,
+        imagePath: timetable.image_path,
+        groupe: timetable.groupe?.nom || '-',
+        filiere: timetable.groupe?.filiere?.nom || timetable.groupe?.filier?.nom || '-',
+        audienceType: timetable.audience_type,
+        professeurs: Array.isArray(timetable.professeurs)
+          ? timetable.professeurs
+              .map((professeur) => professeur.user?.name)
+              .filter(Boolean)
+              .join(', ')
+          : '',
+        createdAt: timetable.created_at || '',
+      })),
+    [timetables]
+  );
+
   return {
     catalog,
     rows,
     scheduleItems,
+    timetableItems,
     selectedGroup,
     setSelectedGroup,
     selectedModule,

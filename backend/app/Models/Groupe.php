@@ -54,4 +54,9 @@ class Groupe extends Model
     {
         return $this->hasMany(EmploiDuTemps::class);
     }
+
+    public function timetables(): HasMany
+    {
+        return $this->hasMany(Timetable::class);
+    }
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Admin\ModuleController;
 use App\Http\Controllers\Api\Admin\NoteValidationController;
 use App\Http\Controllers\Api\Admin\ProfesseurController;
 use App\Http\Controllers\Api\Admin\StagiaireController;
+use App\Http\Controllers\Api\Admin\AdminTimetableController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Common\NotificationController;
 use App\Http\Controllers\Api\Professeur\NoteController as ProfNoteController;
@@ -48,6 +49,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('stagiaires', StagiaireController::class);
         Route::apiResource('professeurs', ProfesseurController::class);
         Route::apiResource('groupes', \App\Http\Controllers\Api\Admin\GroupeController::class);
+        Route::get('/timetables', [AdminTimetableController::class, 'index']);
+        Route::post('/timetables', [AdminTimetableController::class, 'store']);
+        Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
 
         Route::get('/notes/pending', [NoteValidationController::class, 'indexPending']);
         Route::patch('/notes/{note}/validate', [NoteValidationController::class, 'validateNote']);
@@ -65,12 +69,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/students', [ProfStudentController::class, 'index']);
         Route::get('/catalog', [ProfStudentController::class, 'catalog']);
         Route::get('/schedule', [ProfScheduleController::class, 'index']);
+        Route::get('/timetables', [AdminTimetableController::class, 'index']);
+        Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
     });
 
     // Stagiaire
     Route::middleware('role:stagiaire')->prefix('stagiaire')->group(function () {
         Route::get('/notes', [StudentPortalController::class, 'notes']);
         Route::get('/schedule', [StudentPortalController::class, 'schedule']);
+        Route::get('/timetables', [AdminTimetableController::class, 'index']);
+        Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
         Route::get('/announcements', [StudentPortalController::class, 'announcements']);
         Route::get('/ai-recommendation', [StudentPortalController::class, 'aiRecommendation']);
     });

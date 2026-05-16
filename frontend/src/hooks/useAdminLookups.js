@@ -6,6 +6,7 @@ const loaders = {
   filieres: adminApi.filieres,
   groups: adminApi.groups,
   modules: adminApi.modules,
+  professors: adminApi.professors,
 };
 
 export const useAdminLookups = (keys = []) => {

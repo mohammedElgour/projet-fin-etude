@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\Filier;
 
 class Professeur extends Model
@@ -38,5 +39,11 @@ class Professeur extends Model
     public function filiere(): BelongsTo
     {
         return $this->filier();
+    }
+
+    public function timetables(): BelongsToMany
+    {
+        return $this->belongsToMany(Timetable::class, 'timetable_professeur')
+            ->withTimestamps();
     }
 }

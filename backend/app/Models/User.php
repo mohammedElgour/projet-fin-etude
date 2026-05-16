@@ -42,6 +42,11 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class);
     }
 
+    public function createdTimetables(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Timetable::class, 'created_by');
+    }
+
     /**
      * Get the attributes that should be cast.
      *
