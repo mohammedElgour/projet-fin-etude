@@ -2,17 +2,39 @@
 
 namespace App\Http\Controllers\Api\Professeur;
 
+use App\Http\Controllers\Api\Professeur\Concerns\ResolvesProfessorScope;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\Professeur\StoreNoteRequest;
+use App\Http\Requests\Api\Professeur\UpdateNoteRequest;
+use App\Http\Resources\Professeur\ProfessorNoteResource;
+use App\Models\Module;
 use App\Models\Note;
 use App\Models\Notification;
+use App\Models\Stagiaire;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class NoteController extends Controller
 {
+    use ResolvesProfessorScope;
+
     public function index(Request $request): JsonResponse
     {
-        $query = Note::with(['stagiaire.user', 'module']);
+        $professeur = $this->resolveProfessorProfile($request);
+        $filiereId = $this->resolveProfessorFiliereId($professeur);
+
+        if (!$filiereId) {
+            return response()->json(
+                ProfessorNoteResource::collection(
+                    Note::query()->whereRaw('1 = 0')->paginate(20)
+                )
+            );
+        }
+
+        $query = Note::query()
+            ->with(['stagiaire.user', 'stagiaire.groupe.filiere', 'module'])
+            ->whereHas('module', fn ($query) => $query->where('filiere_id', $filiereId))
+            ->whereHas('stagiaire.groupe', fn ($query) => $query->where('filiere_id', $filiereId));
 
         if ($request->filled('stagiaire_id')) {
             $query->where('stagiaire_id', $request->integer('stagiaire_id'));
@@ -26,16 +48,34 @@ class NoteController extends Controller
             $query->where('validation_status', $request->string('status'));
         }
 
-        return response()->json($query->orderByDesc('updated_at')->paginate(20));
+        return response()->json(
+            ProfessorNoteResource::collection(
+                $query->orderByDesc('updated_at')->paginate(20)
+            )
+        );
     }
 
-    public function storeOrUpdate(Request $request): JsonResponse
+    public function storeOrUpdate(StoreNoteRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'stagiaire_id' => ['required', 'exists:stagiaires,id'],
-            'module_id' => ['required', 'exists:modules,id'],
-            'note' => ['required', 'numeric', 'min:0', 'max:20'],
-        ]);
+        $professeur = $this->resolveProfessorProfile($request);
+        $validated = $request->validated();
+
+        $stagiaire = Stagiaire::query()
+            ->with('groupe')
+            ->findOrFail($validated['stagiaire_id']);
+
+        $module = Module::query()->findOrFail($validated['module_id']);
+        $filiereId = $this->resolveProfessorFiliereId($professeur);
+
+        if (
+            !$filiereId
+            || (int) $stagiaire->groupe?->filiere_id !== $filiereId
+            || (int) $module->filiere_id !== $filiereId
+        ) {
+            return response()->json([
+                'message' => 'Vous ne pouvez saisir des notes que pour votre filiere.',
+            ], 403);
+        }
 
         $note = Note::updateOrCreate(
             [
@@ -63,21 +103,34 @@ class NoteController extends Controller
 
         return response()->json([
             'message' => 'Note saved successfully. Validation pending.',
-            'note' => $note,
+            'note' => new ProfessorNoteResource($note),
         ], 201);
     }
 
-    public function update(Request $request, Note $note): JsonResponse
+    public function update(UpdateNoteRequest $request, Note $note): JsonResponse
     {
+        $professeur = $this->resolveProfessorProfile($request);
+        $filiereId = $this->resolveProfessorFiliereId($professeur);
+
+        $note->loadMissing(['stagiaire.groupe', 'stagiaire.user', 'module']);
+
+        if (
+            !$filiereId
+            || (int) $note->module?->filiere_id !== $filiereId
+            || (int) $note->stagiaire?->groupe?->filiere_id !== $filiereId
+        ) {
+            return response()->json([
+                'message' => 'Vous ne pouvez modifier que les notes de votre filiere.',
+            ], 403);
+        }
+
         if ($note->validation_status === 'validated') {
             return response()->json([
                 'message' => 'Validated notes cannot be edited.',
             ], 422);
         }
 
-        $validated = $request->validate([
-            'note' => ['required', 'numeric', 'min:0', 'max:20'],
-        ]);
+        $validated = $request->validated();
 
         $note->update([
             'note' => $validated['note'],
@@ -98,7 +151,7 @@ class NoteController extends Controller
 
         return response()->json([
             'message' => 'Note updated successfully.',
-            'note' => $note,
+            'note' => new ProfessorNoteResource($note),
         ]);
     }
 }

@@ -22,7 +22,7 @@ const ProfesseurStudentsPage = () => {
               <option value="">Tous les groupes</option>
               {catalog.groupes.map((groupe) => (
                 <option key={groupe.id} value={groupe.id}>
-                  {groupe.nom} - {groupe.filier?.nom}
+                  {groupe.nom} - {groupe.filiere?.nom || groupe.filier?.nom || 'Filiere'}
                 </option>
               ))}
             </select>
@@ -37,7 +37,7 @@ const ProfesseurStudentsPage = () => {
               <option value="">Tous les modules</option>
               {catalog.modules.map((module) => (
                 <option key={module.id} value={module.id}>
-                  {module.nom} - {module.filier?.nom}
+                  {module.nom} - {module.filiere?.nom || module.filier?.nom || 'Filiere'}
                 </option>
               ))}
             </select>

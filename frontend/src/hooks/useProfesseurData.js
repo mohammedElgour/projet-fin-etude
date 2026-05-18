@@ -51,7 +51,7 @@ export const useProfesseurData = () => {
           studentId: student.id,
           name: student.user?.name || 'Stagiaire',
           groupe: student.groupe?.nom || '-',
-          filiere: student.groupe?.filier?.nom || '-',
+          filiere: student.groupe?.filiere?.nom || student.groupe?.filier?.nom || '-',
           noteValue: currentNote?.note || '',
           noteStatus: currentNote?.validation_status || 'not_set',
           noteId: currentNote?.id || null,
@@ -70,7 +70,7 @@ export const useProfesseurData = () => {
               day: slot.jour,
               module: slot.module,
               groupe: entry.groupe?.nom || '-',
-              filiere: entry.groupe?.filier?.nom || '-',
+              filiere: entry.groupe?.filiere?.nom || entry.groupe?.filier?.nom || '-',
               date: entry.date || '-',
             }))
           : []
