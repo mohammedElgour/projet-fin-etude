@@ -18,6 +18,10 @@ class Note extends Model
     protected $fillable = [
         'stagiaire_id',
         'module_id',
+        'cc1',
+        'cc2',
+        'cc3',
+        'efm',
         'note',
         'is_validated',
         'validation_status',
@@ -31,6 +35,10 @@ class Note extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'cc1' => 'decimal:2',
+        'cc2' => 'decimal:2',
+        'cc3' => 'decimal:2',
+        'efm' => 'decimal:2',
         'note' => 'decimal:2',
         'is_validated' => 'boolean',
         'reviewed_at' => 'datetime',

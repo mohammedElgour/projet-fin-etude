@@ -152,7 +152,6 @@ const sidebarConfig = {
         label: 'Main',
         items: [
           { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/professeur' },
-          { key: 'students', label: 'Stagiaires', icon: School, path: '/dashboard/professeur/students' },
           { key: 'notes', label: 'Notes', icon: ScrollText, path: '/dashboard/professeur/notes' },
         ],
       },
@@ -176,15 +175,10 @@ const sidebarConfig = {
         title: 'Espace professeur',
         description: 'Saisissez les notes, gardez un oeil sur la progression du groupe et restez concentre sur la prochaine action utile.',
       },
-      '/dashboard/professeur/students': {
-        eyebrow: 'Pedagogie',
-        title: 'Stagiaires',
-        description: 'Retrouvez la liste des stagiaires sur une page separee.',
-      },
       '/dashboard/professeur/notes': {
         eyebrow: 'Pedagogie',
         title: 'Notes',
-        description: 'Gerez la saisie des notes sans surcharger le dashboard.',
+        description: 'Gerez la saisie des notes et la liste des stagiaires depuis une seule page.',
       },
       '/dashboard/professeur/schedule': {
         eyebrow: 'Planning',

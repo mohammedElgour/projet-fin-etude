@@ -293,12 +293,20 @@ export const professeurApi = {
     const response = await api.post('/professeur/notes', payload);
     return response.data;
   },
+  saveNotes: async (payload) => {
+    const response = await api.post('/professeur/notes', payload);
+    return response.data;
+  },
   updateNote: async (noteId, payload) => {
     const response = await api.patch(`/professeur/notes/${noteId}`, payload);
     return response.data;
   },
   students: async (params = {}) => {
     const response = await api.get('/professeur/students', { params });
+    return response.data;
+  },
+  stagiaires: async (params = {}) => {
+    const response = await api.get('/professeur/stagiaires', { params });
     return response.data;
   },
   catalog: async () => {

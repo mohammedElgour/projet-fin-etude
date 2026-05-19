@@ -6,8 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Module extends Model
+
 {
     use HasFactory;
 
@@ -57,4 +59,11 @@ class Module extends Model
     }
 
     protected $table = 'modules';
+
+    public function professeurs()
+    {
+        return $this->belongsToMany(Professeur::class, 'professeur_module')
+            ->withTimestamps();
+    }
 }
+

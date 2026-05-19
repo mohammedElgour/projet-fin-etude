@@ -18,22 +18,34 @@ class GradeWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $student = Stagiaire::with('user')->firstOrFail();
-        $module = Module::firstOrFail();
+        $student = Stagiaire::with(['user', 'groupe'])->whereHas('groupe', fn ($query) => $query->where('nom', 'DD101'))->firstOrFail();
+        $module = Module::query()
+            ->where('filiere_id', $student->groupe->filiere_id)
+            ->firstOrFail();
 
         $this->postJson('/api/login', [
             'email' => 'prof@ista.test',
             'password' => 'password123',
         ])->assertOk();
 
-        Sanctum::actingAs(User::where('email', 'prof@ista.test')->firstOrFail());
+        $professorUser = User::where('email', 'prof@ista.test')->firstOrFail();
+        $professorUser->professeur->groupes()->syncWithoutDetaching([$student->groupe_id]);
+        $professorUser->professeur->modules()->syncWithoutDetaching([$module->id]);
+
+        Sanctum::actingAs($professorUser);
 
         $this->postJson('/api/professeur/notes', [
                 'stagiaire_id' => $student->id,
                 'module_id' => $module->id,
-                'note' => 15.75,
+                'cc1' => 12,
+                'cc2' => 14,
+                'cc3' => 13,
+                'efm' => 15,
             ])
             ->assertCreated()
+            ->assertJsonPath('note.cc1', 12)
+            ->assertJsonPath('note.efm', 15)
+            ->assertJsonPath('note.moyenne', 13.8)
             ->assertJsonPath('note.validation_status', 'pending');
 
         $this->postJson('/api/login', [
@@ -68,7 +80,9 @@ class GradeWorkflowTest extends TestCase
 
         $this->assertTrue(
             collect($studentNotes)->contains(
-                fn ($note) => $note['module_id'] === $module->id && $note['validation_status'] === 'validated'
+                fn ($note) => $note['module_id'] === $module->id
+                    && $note['validation_status'] === 'validated'
+                    && (float) $note['note'] === 13.8
             )
         );
     }

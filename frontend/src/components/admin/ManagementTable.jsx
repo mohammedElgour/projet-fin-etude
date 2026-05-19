@@ -177,7 +177,10 @@ const ManagementTable = ({
                   {columns.map((column) => (
                     <th
                       key={column.key || column.header}
-                      className="bg-slate-50/88 px-5 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 first:rounded-l-[18px] last:rounded-r-[18px] dark:bg-white/5 dark:text-slate-400"
+                      className={[
+                        'bg-slate-50/88 px-5 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 first:rounded-l-[18px] last:rounded-r-[18px] dark:bg-white/5 dark:text-slate-400',
+                        column.headerClassName || '',
+                      ].join(' ')}
                     >
                       {column.header}
                     </th>
@@ -201,7 +204,10 @@ const ManagementTable = ({
                     {columns.map((column) => (
                       <td
                         key={column.key || column.header}
-                        className="surface-subtle px-5 py-4 text-sm text-slate-700 first:rounded-l-[22px] last:rounded-r-[22px] group-hover:bg-white dark:text-slate-200 dark:group-hover:bg-slate-900/90"
+                        className={[
+                          'surface-subtle px-5 py-4 text-sm text-slate-700 first:rounded-l-[22px] last:rounded-r-[22px] group-hover:bg-white dark:text-slate-200 dark:group-hover:bg-slate-900/90',
+                          column.className || '',
+                        ].join(' ')}
                       >
                         {column.render ? column.render(row) : (row[column.key] ?? '-')}
                       </td>
@@ -221,10 +227,11 @@ const ManagementTable = ({
                             <button
                               key={`${action.label}-${row.id}`}
                               type="button"
+                              disabled={typeof action.disabled === 'function' ? action.disabled(row) : Boolean(action.disabled)}
                               onClick={() => action.onClick(row)}
-                              className={action.className}
+                              className={typeof action.className === 'function' ? action.className(row) : action.className}
                             >
-                              {action.label}
+                              {typeof action.label === 'function' ? action.label(row) : action.label}
                             </button>
                           ))}
                           {onEdit ? (

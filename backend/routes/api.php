@@ -66,6 +66,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/notes', [ProfNoteController::class, 'storeOrUpdate']);
         Route::patch('/notes/{note}', [ProfNoteController::class, 'update']);
 
+        // Groupe/Module -> Stagiaires list
+        Route::get('/stagiaires', [\App\Http\Controllers\Api\Professeur\ProfStagiairesController::class, 'index']);
+
         Route::get('/students', [ProfStudentController::class, 'index']);
         Route::get('/catalog', [ProfStudentController::class, 'catalog']);
         Route::get('/schedule', [ProfScheduleController::class, 'index']);

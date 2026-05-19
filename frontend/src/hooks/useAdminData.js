@@ -32,8 +32,19 @@ export const useAdminDashboardData = () => {
         adminApi.pendingNotes(),
       ]);
 
-      setStats(statsRes);
-      setPendingNotes(pendingRes?.data || []);
+      // Debug: inspect raw API payloads
+      console.log('[AdminDashboard] dashboardStats() raw:', statsRes);
+      console.log('[AdminDashboard] pendingNotes() raw:', pendingRes);
+
+      // Normalize: sometimes axios returns {data: {...}} or directly {...}
+      const normalizedStats = statsRes?.kpis || statsRes?.charts ? statsRes : statsRes?.data || {};
+      const normalizedPending = Array.isArray(pendingRes)
+        ? pendingRes
+        : pendingRes?.data || pendingRes?.results || [];
+
+      setStats(normalizedStats);
+      setPendingNotes(normalizedPending);
+
     } catch (err) {
       setError(err?.response?.data?.message || 'Impossible de charger le tableau de bord admin.');
     } finally {

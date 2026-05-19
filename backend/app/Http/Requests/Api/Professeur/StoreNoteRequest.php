@@ -16,7 +16,10 @@ class StoreNoteRequest extends FormRequest
         return [
             'stagiaire_id' => ['required', 'integer', 'exists:stagiaires,id'],
             'module_id' => ['required', 'integer', 'exists:modules,id'],
-            'note' => ['required', 'numeric', 'min:0', 'max:20'],
+            'cc1' => ['nullable', 'numeric', 'min:0', 'max:20'],
+            'cc2' => ['nullable', 'numeric', 'min:0', 'max:20'],
+            'cc3' => ['nullable', 'numeric', 'min:0', 'max:20'],
+            'efm' => ['nullable', 'numeric', 'min:0', 'max:20'],
         ];
     }
 }

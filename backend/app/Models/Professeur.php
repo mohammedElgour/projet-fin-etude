@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\Filier;
+use App\Models\Module;
+use App\Models\Groupe;
 
 class Professeur extends Model
 {
@@ -46,4 +48,17 @@ class Professeur extends Model
         return $this->belongsToMany(Timetable::class, 'timetable_professeur')
             ->withTimestamps();
     }
+
+    public function modules()
+    {
+        return $this->belongsToMany(Module::class, 'professeur_module')
+            ->withTimestamps();
+    }
+
+    public function groupes()
+    {
+        return $this->belongsToMany(Groupe::class, 'professeur_groupe')
+            ->withTimestamps();
+    }
 }
+

@@ -2,67 +2,134 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { professeurApi } from '../services/api';
 import { normalizeCollectionResponse } from '../lib/normalizeCollectionResponse';
 
+const normalizeCatalog = (response) => {
+  const payload = response?.data || response || {};
+
+  return {
+    groupes: Array.isArray(payload.groupes) ? payload.groupes : [],
+    modules: Array.isArray(payload.modules) ? payload.modules : [],
+  };
+};
+
 export const useProfesseurData = () => {
   const [catalog, setCatalog] = useState({ groupes: [], modules: [] });
   const [students, setStudents] = useState([]);
   const [schedule, setSchedule] = useState([]);
+  const [chartData, setChartData] = useState([]);
   const [timetables, setTimetables] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
+  const [bootstrapGroupId, setBootstrapGroupId] = useState('');
   const [selectedModule, setSelectedModule] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadData = useCallback(async (groupId = '', moduleId = '') => {
+  const groupId = selectedGroup || bootstrapGroupId;
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
 
     try {
+      if (!groupId) {
+        const catalogRes = await professeurApi.catalog();
+        const nextCatalog = normalizeCatalog(catalogRes);
+        const fallbackGroupId = nextCatalog.groupes[0]?.id;
+
+        setCatalog(nextCatalog);
+
+        if (fallbackGroupId) {
+          setBootstrapGroupId(String(fallbackGroupId));
+        } else {
+          setStudents([]);
+          setSchedule([]);
+          setChartData([]);
+          setTimetables([]);
+        }
+
+        return;
+      }
+
+      // eslint-disable-next-line no-console
+      console.log('GROUP ID:', groupId);
+
       const [catalogRes, studentsRes, scheduleRes, timetablesRes] = await Promise.all([
         professeurApi.catalog(),
-        professeurApi.students({
-          ...(groupId ? { groupe_id: groupId } : {}),
-          ...(moduleId ? { module_id: moduleId } : {}),
-        }),
-        professeurApi.schedule(groupId ? { groupe_id: groupId } : {}),
+        professeurApi.stagiaires({ groupe_id: groupId }),
+        professeurApi.schedule({ groupe_id: groupId }),
         professeurApi.timetables(),
       ]);
 
-      setCatalog(catalogRes);
-      setStudents(studentsRes?.data || []);
-      setSchedule(scheduleRes?.data || []);
+      // eslint-disable-next-line no-console
+      console.log('STUDENTS DATA:', studentsRes);
+      // eslint-disable-next-line no-console
+      console.log('SCHEDULE DATA:', scheduleRes);
+
+      const nextCatalog = normalizeCatalog(catalogRes);
+      const nextStudents = normalizeCollectionResponse(studentsRes).filter(
+        (student) => String(student?.groupe?.id || '') === String(groupId)
+      );
+      const nextSchedule = normalizeCollectionResponse(scheduleRes);
+
+      setCatalog(nextCatalog);
+      setStudents(nextStudents);
+      setSchedule(nextSchedule);
+      setChartData(nextSchedule);
       setTimetables(normalizeCollectionResponse(timetablesRes));
-    } catch (err) {
-      setError(err?.response?.data?.message || 'Impossible de charger les donnees professeur.');
+
+      if (!selectedGroup && nextCatalog.groupes[0]?.id && !bootstrapGroupId) {
+        setBootstrapGroupId(String(nextCatalog.groupes[0].id));
+      }
+    } catch (error) {
+      console.error('Dashboard loading error:', error);
+
+      const apiMessage = error?.response?.data?.message;
+      if (apiMessage === 'Professor has no filiere assigned') {
+        setError('Aucune filiere assignee a ce professeur');
+      } else {
+        setError(apiMessage || 'Impossible de charger les donnees professeur.');
+      }
+
+      setStudents([]);
+      setSchedule([]);
+      setChartData([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [bootstrapGroupId, groupId, selectedGroup]);
 
   useEffect(() => {
-    loadData(selectedGroup, selectedModule);
-  }, [loadData, selectedGroup, selectedModule]);
+    loadData();
+  }, [groupId, loadData]);
 
   const rows = useMemo(
     () =>
       students.map((student) => {
-        const currentNote = Array.isArray(student.notes) && student.notes.length ? student.notes[0] : null;
+        const currentNote = selectedModule
+          ? (Array.isArray(student.notes) ? student.notes.find((note) => String(note.module_id) === String(selectedModule)) : null)
+          : (Array.isArray(student.notes) && student.notes.length ? student.notes[0] : null);
+
         return {
           id: student.id,
           studentId: student.id,
           name: student.user?.name || 'Stagiaire',
           groupe: student.groupe?.nom || '-',
           filiere: student.groupe?.filiere?.nom || student.groupe?.filier?.nom || '-',
-          noteValue: currentNote?.note || '',
-          noteStatus: currentNote?.validation_status || 'not_set',
+          cc1: currentNote?.cc1 ?? '',
+          cc2: currentNote?.cc2 ?? '',
+          cc3: currentNote?.cc3 ?? '',
+          efm: currentNote?.efm ?? '',
+          moyenne: currentNote?.moyenne ?? currentNote?.note ?? '',
+          noteValue: currentNote?.note ?? '',
+          noteStatus: currentNote?.validation_status ?? 'not_set',
           noteId: currentNote?.id || null,
         };
       }),
-    [students]
+    [selectedModule, students]
   );
 
   const scheduleItems = useMemo(
     () =>
-      schedule.flatMap((entry) =>
+      chartData.flatMap((entry) =>
         Array.isArray(entry.fichier)
           ? entry.fichier.map((slot, index) => ({
               id: `${entry.id}-${index}`,
@@ -75,7 +142,7 @@ export const useProfesseurData = () => {
             }))
           : []
       ),
-    [schedule]
+    [chartData]
   );
 
   const timetableItems = useMemo(
@@ -102,7 +169,9 @@ export const useProfesseurData = () => {
   return {
     catalog,
     rows,
+    schedule,
     scheduleItems,
+    chartData,
     timetableItems,
     selectedGroup,
     setSelectedGroup,
@@ -111,6 +180,6 @@ export const useProfesseurData = () => {
     loading,
     error,
     setError,
-    reload: () => loadData(selectedGroup, selectedModule),
+    reload: loadData,
   };
 };

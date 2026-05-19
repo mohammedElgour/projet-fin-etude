@@ -50,7 +50,10 @@ class ProfessorScopeTest extends TestCase
         $this->postJson('/api/professeur/notes', [
             'stagiaire_id' => $infraStudent->id,
             'module_id' => $infraModule->id,
-            'note' => 14.5,
+            'cc1' => 14,
+            'cc2' => 14.5,
+            'cc3' => 15,
+            'efm' => 14,
         ])->assertStatus(403);
     }
 }

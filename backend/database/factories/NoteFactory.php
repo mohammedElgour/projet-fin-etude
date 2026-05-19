@@ -27,11 +27,20 @@ class NoteFactory extends Factory
     public function definition(): array
     {
         $status = $this->faker->randomElement(['pending', 'validated', 'rejected']);
+        $cc1 = $this->faker->randomFloat(2, 0, 20);
+        $cc2 = $this->faker->randomFloat(2, 0, 20);
+        $cc3 = $this->faker->randomFloat(2, 0, 20);
+        $efm = $this->faker->randomFloat(2, 0, 20);
+        $average = round((($cc1 + $cc2 + $cc3 + ($efm * 2)) / 5), 2);
 
         return [
             'stagiaire_id' => Stagiaire::factory(),
             'module_id' => Module::factory(),
-            'note' => $this->faker->randomFloat(2, 0, 20),
+            'cc1' => $cc1,
+            'cc2' => $cc2,
+            'cc3' => $cc3,
+            'efm' => $efm,
+            'note' => $average,
             'is_validated' => $status === 'validated',
             'validation_status' => $status,
             'feedback' => $status === 'rejected' ? 'Veuillez verifier cette note.' : null,

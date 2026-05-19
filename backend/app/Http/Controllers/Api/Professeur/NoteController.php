@@ -14,27 +14,38 @@ use App\Models\Stagiaire;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+
 class NoteController extends Controller
 {
     use ResolvesProfessorScope;
 
+    protected function calculateAverage(array $validated): float
+    {
+        return round(((
+            (float) ($validated['cc1'] ?? 0) +
+            (float) ($validated['cc2'] ?? 0) +
+            (float) ($validated['cc3'] ?? 0) +
+            ((float) ($validated['efm'] ?? 0) * 2)
+        ) / 5), 2);
+    }
+
     public function index(Request $request): JsonResponse
     {
-        $professeur = $this->resolveProfessorProfile($request);
-        $filiereId = $this->resolveProfessorFiliereId($professeur);
 
-        if (!$filiereId) {
-            return response()->json(
-                ProfessorNoteResource::collection(
-                    Note::query()->whereRaw('1 = 0')->paginate(20)
-                )
-            );
-        }
+        $professeur = $this->resolveProfessorProfile($request);
+
+
+
+        $assignedModuleIds = $professeur->modules()->pluck('modules.id');
+
+
+        $assignedGroupeIds = $professeur->groupes()->pluck('groupes.id');
 
         $query = Note::query()
             ->with(['stagiaire.user', 'stagiaire.groupe.filiere', 'module'])
-            ->whereHas('module', fn ($query) => $query->where('filiere_id', $filiereId))
-            ->whereHas('stagiaire.groupe', fn ($query) => $query->where('filiere_id', $filiereId));
+            ->whereIn('module_id', $assignedModuleIds)
+            ->whereHas('stagiaire.groupe', fn ($query) => $query->whereIn('groupes.id', $assignedGroupeIds));
+
 
         if ($request->filled('stagiaire_id')) {
             $query->where('stagiaire_id', $request->integer('stagiaire_id'));
@@ -65,17 +76,16 @@ class NoteController extends Controller
             ->findOrFail($validated['stagiaire_id']);
 
         $module = Module::query()->findOrFail($validated['module_id']);
-        $filiereId = $this->resolveProfessorFiliereId($professeur);
 
-        if (
-            !$filiereId
-            || (int) $stagiaire->groupe?->filiere_id !== $filiereId
-            || (int) $module->filiere_id !== $filiereId
-        ) {
-            return response()->json([
-                'message' => 'Vous ne pouvez saisir des notes que pour votre filiere.',
-            ], 403);
+        $professeur->loadMissing(['modules', 'groupes']);
+
+        $isModuleAssigned = $professeur->modules->contains(fn ($m) => (int) $m->id === (int) $module->id);
+        $isGroupeAssigned = $professeur->groupes->contains(fn ($g) => (int) $g->id === (int) $stagiaire->groupe_id);
+
+        if (!$isModuleAssigned || !$isGroupeAssigned) {
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
+
 
         $note = Note::updateOrCreate(
             [
@@ -83,7 +93,11 @@ class NoteController extends Controller
                 'module_id' => $validated['module_id'],
             ],
             [
-                'note' => $validated['note'],
+                'cc1' => $validated['cc1'] ?? null,
+                'cc2' => $validated['cc2'] ?? null,
+                'cc3' => $validated['cc3'] ?? null,
+                'efm' => $validated['efm'] ?? null,
+                'note' => $this->calculateAverage($validated),
                 'is_validated' => false,
                 'validation_status' => 'pending',
                 'feedback' => null,
@@ -110,19 +124,17 @@ class NoteController extends Controller
     public function update(UpdateNoteRequest $request, Note $note): JsonResponse
     {
         $professeur = $this->resolveProfessorProfile($request);
-        $filiereId = $this->resolveProfessorFiliereId($professeur);
-
         $note->loadMissing(['stagiaire.groupe', 'stagiaire.user', 'module']);
 
-        if (
-            !$filiereId
-            || (int) $note->module?->filiere_id !== $filiereId
-            || (int) $note->stagiaire?->groupe?->filiere_id !== $filiereId
-        ) {
-            return response()->json([
-                'message' => 'Vous ne pouvez modifier que les notes de votre filiere.',
-            ], 403);
+        $professeur->loadMissing(['modules', 'groupes']);
+
+        $isModuleAssigned = $professeur->modules->contains(fn ($m) => (int) $m->id === (int) $note->module?->id);
+        $isGroupeAssigned = $professeur->groupes->contains(fn ($g) => (int) $g->id === (int) $note->stagiaire?->groupe_id);
+
+        if (!$isModuleAssigned || !$isGroupeAssigned) {
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
+
 
         if ($note->validation_status === 'validated') {
             return response()->json([
@@ -133,7 +145,11 @@ class NoteController extends Controller
         $validated = $request->validated();
 
         $note->update([
-            'note' => $validated['note'],
+            'cc1' => $validated['cc1'] ?? null,
+            'cc2' => $validated['cc2'] ?? null,
+            'cc3' => $validated['cc3'] ?? null,
+            'efm' => $validated['efm'] ?? null,
+            'note' => $this->calculateAverage($validated),
             'is_validated' => false,
             'validation_status' => 'pending',
             'feedback' => null,

@@ -6,8 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Groupe extends Model
+
 {
     protected $table = 'groupes';
 
@@ -59,4 +61,11 @@ class Groupe extends Model
     {
         return $this->hasMany(Timetable::class);
     }
+
+    public function professeurs()
+    {
+        return $this->belongsToMany(Professeur::class, 'professeur_groupe')
+            ->withTimestamps();
+    }
 }
+

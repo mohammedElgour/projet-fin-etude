@@ -1,5 +1,5 @@
 import React from 'react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import DashboardLayout from './components/layout/DashboardLayout';
@@ -23,7 +23,6 @@ import AdminTimetablePage from './pages/AdminTimetablePage';
 import AdminNotificationsPage from './pages/AdminNotificationsPage';
 import ProfesseurDashboard from './pages/ProfesseurDashboard';
 import ProfesseurStudentsPage from './pages/ProfesseurStudentsPage';
-import ProfesseurNotesPage from './pages/ProfesseurNotesPage';
 import ProfesseurSchedulePage from './pages/ProfesseurSchedulePage';
 import ProfesseurNotificationsPage from './pages/ProfesseurNotificationsPage';
 import StagiaireDashboard from './pages/StagiaireDashboard';
@@ -97,8 +96,8 @@ function App() {
             }
           >
             <Route index element={<ProfesseurDashboard />} />
-            <Route path="students" element={<ProfesseurStudentsPage />} />
-            <Route path="notes" element={<ProfesseurNotesPage />} />
+            <Route path="students" element={<Navigate to="/dashboard/professeur/notes" replace />} />
+            <Route path="notes" element={<ProfesseurStudentsPage />} />
             <Route path="schedule" element={<ProfesseurSchedulePage />} />
             <Route path="notifications" element={<ProfesseurNotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
