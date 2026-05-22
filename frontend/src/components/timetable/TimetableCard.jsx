@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ActionButton from '../admin/ActionButton';
 
 const formatDate = (value) => {
@@ -20,21 +20,35 @@ const formatDate = (value) => {
 };
 
 const TimetableCard = ({ item, showAudience = false }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [item.imageUrl]);
+
   const audienceLabel =
     item.audienceType === 'professeurs'
-      ? item.professeurs || 'Professeurs'
+      ? item.professeurs || 'Professeur'
       : item.groupe && item.groupe !== '-'
         ? `${item.groupe}${item.filiere && item.filiere !== '-' ? ` - ${item.filiere}` : ''}`
         : 'Groupe';
+  const canOpenImage = Boolean(item.imageUrl) && !imageFailed;
 
   return (
     <article className="overflow-hidden rounded-[28px] border border-white/70 bg-white/90 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/75">
       <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-900">
-        <img
-          src={item.imageUrl}
-          alt={item.title || 'Emploi du temps'}
-          className="h-full w-full object-cover"
-        />
+        {canOpenImage ? (
+          <img
+            src={item.imageUrl}
+            alt={item.title || 'Emploi du temps'}
+            className="h-full w-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm text-slate-500 dark:text-slate-400">
+            Image indisponible
+          </div>
+        )}
       </div>
       <div className="space-y-4 p-5">
         <div className="space-y-2">
@@ -53,21 +67,23 @@ const TimetableCard = ({ item, showAudience = false }) => {
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <ActionButton
-            as="a"
-            href={item.imageUrl}
-            target="_blank"
-            rel="noreferrer"
+            as={canOpenImage ? 'a' : 'span'}
+            href={canOpenImage ? item.imageUrl : undefined}
+            target={canOpenImage ? '_blank' : undefined}
+            rel={canOpenImage ? 'noreferrer' : undefined}
             variant="secondary"
             className="w-full sm:w-auto"
+            disabled={!canOpenImage}
           >
             Ouvrir
           </ActionButton>
           <ActionButton
-            as="a"
-            href={item.imageUrl}
-            download
+            as={canOpenImage ? 'a' : 'span'}
+            href={canOpenImage ? item.imageUrl : undefined}
+            download={canOpenImage || undefined}
             variant="primary"
             className="w-full sm:w-auto"
+            disabled={!canOpenImage}
           >
             Telecharger
           </ActionButton>

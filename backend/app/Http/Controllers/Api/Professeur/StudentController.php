@@ -40,7 +40,7 @@ class StudentController extends Controller
                         $notes->where('module_id', $moduleId);
                     }
 
-                    $notes->with('module')->latest('updated_at');
+                    $notes->with(['module', 'submission'])->latest('updated_at');
                 },
             ])
             ->whereIn('groupe_id', $assignedGroupeIds);

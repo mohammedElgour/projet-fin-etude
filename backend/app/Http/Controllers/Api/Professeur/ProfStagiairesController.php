@@ -41,8 +41,8 @@ class ProfStagiairesController extends Controller
                     if ($moduleId) {
                         $notes->where('module_id', $moduleId);
                     }
-                    // Ensure deterministic ordering for note resource
-                    $notes->latest('updated_at');
+
+                    $notes->with(['module', 'submission'])->latest('updated_at');
                 },
             ])
             ->where('groupe_id', $groupeId);
@@ -52,4 +52,3 @@ class ProfStagiairesController extends Controller
         );
     }
 }
-

@@ -7,9 +7,11 @@ class FiliereNameNormalizer
     private const CANONICAL_NAMES = [
         "D\u{00E9}veloppement Digital" => [
             "D\u{00E9}veloppement Digital",
+            'Développement Digital',
             'Developpement Digital',
             'DÃ©veloppement Digital',
             'DÃƒÂ©veloppement Digital',
+            'DÃƒÆ’Ã‚Â©veloppement Digital',
         ],
         'Infrastructure Digitale' => [
             'Infrastructure Digitale',
@@ -21,13 +23,17 @@ class FiliereNameNormalizer
         ],
         "G\u{00E9}nie Electrique" => [
             "G\u{00E9}nie Electrique",
+            'Génie Electrique',
             'GÃ©nie Electrique',
             'GÃƒÂ©nie Electrique',
+            'GÃƒÆ’Ã‚Â©nie Electrique',
         ],
         "G\u{00E9}nie Civil" => [
             "G\u{00E9}nie Civil",
+            'Génie Civil',
             'GÃ©nie Civil',
-            'GÃƒÂ©nie civil',
+            'GÃƒÂ©nie Civil',
+            'GÃƒÆ’Ã‚Â©nie civil',
         ],
     ];
 

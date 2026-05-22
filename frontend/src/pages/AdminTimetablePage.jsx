@@ -11,7 +11,7 @@ const createInitialForm = () => ({
   title: '',
   audienceType: 'groupe',
   groupeId: '',
-  professeurIds: [],
+  professeurId: '',
   image: null,
 });
 
@@ -21,7 +21,7 @@ const buildAudienceLabel = (timetable) => {
       ? timetable.professeurs.map((professeur) => professeur.user?.name).filter(Boolean)
       : [];
 
-    return names.length ? names.join(', ') : 'Professeurs';
+    return names.length ? names.join(', ') : 'Professeur';
   }
 
   const groupName = timetable.groupe?.nom || 'Groupe';
@@ -110,16 +110,7 @@ const AdminTimetablePage = () => {
       ...current,
       audienceType,
       groupeId: audienceType === 'groupe' ? current.groupeId : '',
-      professeurIds: audienceType === 'professeurs' ? current.professeurIds : [],
-    }));
-  };
-
-  const handleProfessorSelection = (event) => {
-    const values = Array.from(event.target.selectedOptions).map((option) => option.value);
-
-    setFormValues((current) => ({
-      ...current,
-      professeurIds: values,
+      professeurId: audienceType === 'professeurs' ? current.professeurId : '',
     }));
   };
 
@@ -141,8 +132,8 @@ const AdminTimetablePage = () => {
       return;
     }
 
-    if (formValues.audienceType === 'professeurs' && !formValues.professeurIds.length) {
-      toast.error('Professeurs requis', 'Selectionnez au moins un professeur.');
+    if (formValues.audienceType === 'professeurs' && !formValues.professeurId) {
+      toast.error('Professeur requis', 'Selectionnez un professeur.');
       return;
     }
 
@@ -153,9 +144,7 @@ const AdminTimetablePage = () => {
     if (formValues.audienceType === 'groupe') {
       payload.append('groupe_id', formValues.groupeId);
     } else {
-      formValues.professeurIds.forEach((id, index) => {
-        payload.append(`professeur_ids[${index}]`, id);
-      });
+      payload.append('professeur_id', formValues.professeurId);
     }
 
     setSubmitting(true);
@@ -183,7 +172,7 @@ const AdminTimetablePage = () => {
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-slate-950 dark:text-white">Partager un emploi du temps</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Envoyez une image a un groupe complet ou a un ou plusieurs professeurs sans sortir des conventions du dashboard.
+            Envoyez une image a un groupe complet ou a un professeur sans sortir des conventions du dashboard.
           </p>
         </div>
 
@@ -223,7 +212,7 @@ const AdminTimetablePage = () => {
                       : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
                   }`}
                 >
-                  Un ou plusieurs professeurs
+                  Un professeur
                 </button>
               </div>
             </div>
@@ -246,22 +235,21 @@ const AdminTimetablePage = () => {
               </div>
             ) : (
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Professeurs</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Professeur</label>
                 <select
-                  multiple
-                  value={formValues.professeurIds}
-                  onChange={handleProfessorSelection}
-                  className="min-h-40 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/15"
+                  value={formValues.professeurId}
+                  onChange={(event) =>
+                    setFormValues((current) => ({ ...current, professeurId: event.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/15"
                 >
+                  <option value="">Selectionner un professeur</option>
                   {professorOptions.map((professor) => (
                     <option key={professor.id} value={professor.id}>
                       {professor.label}{professor.meta ? ` - ${professor.meta}` : ''}
                     </option>
                   ))}
                 </select>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  Maintenez `Ctrl` ou `Cmd` pour selectionner plusieurs professeurs.
-                </p>
               </div>
             )}
 
@@ -328,13 +316,17 @@ const AdminTimetablePage = () => {
               key: 'download',
               header: 'Document',
               render: (row) => (
-                <a
-                  href={row.imageUrl}
-                  download
-                  className="text-sm font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-                >
-                  Telecharger
-                </a>
+                row.imageUrl ? (
+                  <a
+                    href={row.imageUrl}
+                    download
+                    className="text-sm font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+                  >
+                    Telecharger
+                  </a>
+                ) : (
+                  <span className="text-sm text-slate-400 dark:text-slate-500">Image indisponible</span>
+                )
               ),
             },
           ]}

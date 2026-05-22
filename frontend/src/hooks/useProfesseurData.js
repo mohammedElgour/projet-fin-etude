@@ -54,7 +54,10 @@ export const useProfesseurData = () => {
 
       const [catalogRes, studentsRes, scheduleRes, timetablesRes] = await Promise.all([
         professeurApi.catalog(),
-        professeurApi.stagiaires({ groupe_id: groupId }),
+        professeurApi.stagiaires({
+          groupe_id: groupId,
+          ...(selectedModule ? { module_id: selectedModule } : {}),
+        }),
         professeurApi.schedule({ groupe_id: groupId }),
         professeurApi.timetables(),
       ]);
@@ -95,7 +98,7 @@ export const useProfesseurData = () => {
     } finally {
       setLoading(false);
     }
-  }, [bootstrapGroupId, groupId, selectedGroup]);
+  }, [bootstrapGroupId, groupId, selectedGroup, selectedModule]);
 
   useEffect(() => {
     loadData();
@@ -106,11 +109,12 @@ export const useProfesseurData = () => {
       students.map((student) => {
         const currentNote = selectedModule
           ? (Array.isArray(student.notes) ? student.notes.find((note) => String(note.module_id) === String(selectedModule)) : null)
-          : (Array.isArray(student.notes) && student.notes.length ? student.notes[0] : null);
+          : null;
 
         return {
           id: student.id,
           studentId: student.id,
+          groupeId: student.groupe?.id || null,
           name: student.user?.name || 'Stagiaire',
           groupe: student.groupe?.nom || '-',
           filiere: student.groupe?.filiere?.nom || student.groupe?.filier?.nom || '-',
@@ -126,6 +130,24 @@ export const useProfesseurData = () => {
       }),
     [selectedModule, students]
   );
+
+  const activeSubmission = useMemo(() => {
+    if (!selectedModule) {
+      return null;
+    }
+
+    for (const student of students) {
+      const currentNote = Array.isArray(student.notes)
+        ? student.notes.find((note) => String(note.module_id) === String(selectedModule))
+        : null;
+
+      if (currentNote?.submission) {
+        return currentNote.submission;
+      }
+    }
+
+    return null;
+  }, [selectedModule, students]);
 
   const scheduleItems = useMemo(
     () =>
@@ -177,6 +199,8 @@ export const useProfesseurData = () => {
     setSelectedGroup,
     selectedModule,
     setSelectedModule,
+    activeGroupId: groupId,
+    activeSubmission,
     loading,
     error,
     setError,

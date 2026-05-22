@@ -57,6 +57,11 @@ class Groupe extends Model
         return $this->hasMany(EmploiDuTemps::class);
     }
 
+    public function noteSubmissions(): HasMany
+    {
+        return $this->hasMany(NoteSubmission::class);
+    }
+
     public function timetables(): HasMany
     {
         return $this->hasMany(Timetable::class);
@@ -68,4 +73,3 @@ class Groupe extends Model
             ->withTimestamps();
     }
 }
-

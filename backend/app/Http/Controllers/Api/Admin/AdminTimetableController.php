@@ -63,40 +63,50 @@ class AdminTimetableController extends Controller
             'title' => ['nullable', 'string', 'max:255'],
             'image' => ['required', 'image', 'max:5120'],
             'groupe_id' => ['nullable', 'exists:groupes,id'],
-            'professeur_ids' => ['nullable', 'array', 'min:1'],
-            'professeur_ids.*' => ['integer', 'exists:professeurs,id'],
+            'professeur_id' => ['nullable', 'integer', 'exists:professeurs,id'],
         ]);
 
         $hasGroupe = !empty($validated['groupe_id']);
-        $hasProfesseurs = !empty($validated['professeur_ids']);
+        $hasProfesseur = !empty($validated['professeur_id']);
 
-        if ($hasGroupe === $hasProfesseurs) {
+        if ($hasGroupe === $hasProfesseur) {
             return response()->json([
-                'message' => 'Choisissez soit un groupe, soit un ou plusieurs professeurs.',
+                'message' => 'Choisissez soit un groupe, soit un professeur.',
                 'errors' => [
-                    'groupe_id' => ['Choisissez soit un groupe, soit un ou plusieurs professeurs.'],
+                    'groupe_id' => ['Choisissez soit un groupe, soit un professeur.'],
                 ],
             ], 422);
         }
 
-        $timetable = DB::transaction(function () use ($request, $validated) {
-            $path = $request->file('image')->store('timetables', 'public');
+        try {
+            $timetable = DB::transaction(function () use ($request, $validated) {
+                $path = $request->file('image')->store('timetables', 'public');
 
-            $timetable = Timetable::create([
-                'title' => $validated['title'] ?? null,
-                'image_path' => $path,
-                'groupe_id' => $validated['groupe_id'] ?? null,
-                'created_by' => $request->user()->id,
+                $timetable = Timetable::create([
+                    'title' => $validated['title'] ?? null,
+                    'image_path' => $path,
+                    'groupe_id' => $validated['groupe_id'] ?? null,
+                    'created_by' => $request->user()->id,
+                ]);
+
+                if (!empty($validated['professeur_id'])) {
+                    $timetable->professeurs()->sync([$validated['professeur_id']]);
+                }
+
+                return $timetable->load(['groupe.filier', 'professeurs.user', 'creator']);
+            });
+
+            return response()->json($this->transformTimetable($timetable), 201);
+        } catch (Throwable $exception) {
+            Log::error('Failed to store timetable.', [
+                'user_id' => $request->user()?->id,
+                'error' => $exception->getMessage(),
             ]);
 
-            if (!empty($validated['professeur_ids'])) {
-                $timetable->professeurs()->sync($validated['professeur_ids']);
-            }
-
-            return $timetable->load(['groupe.filier', 'professeurs.user', 'creator']);
-        });
-
-        return response()->json($this->transformTimetable($timetable), 201);
+            return response()->json([
+                'message' => "Impossible d'enregistrer l'emploi du temps pour le moment.",
+            ], 500);
+        }
     }
 
     public function show(Request $request, Timetable $timetable): JsonResponse

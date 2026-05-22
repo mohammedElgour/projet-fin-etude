@@ -266,8 +266,20 @@ export const adminApi = {
     });
     return response.data;
   },
-  pendingNotes: async () => {
-    const response = await api.get('/admin/notes/pending');
+  noteSubmissions: async (params = {}) => {
+    const response = await api.get('/admin/note-submissions', { params });
+    return response.data;
+  },
+  noteSubmission: async (id) => {
+    const response = await api.get(`/admin/note-submissions/${id}`);
+    return response.data;
+  },
+  pendingNotes: async (params = {}) => {
+    const response = await api.get('/admin/note-submissions', { params });
+    return response.data;
+  },
+  workflowNotes: async (params = {}) => {
+    const response = await api.get('/admin/notes/workflow', { params });
     return response.data;
   },
   validateNote: async (noteId) => {
@@ -282,6 +294,43 @@ export const adminApi = {
       return response.data;
     });
   },
+  validateNotesGroup: async (payload) => {
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.post('/admin/notes/validate-group', payload);
+      return response.data;
+    });
+  },
+  rejectNotesGroup: async (payload) => {
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.post('/admin/notes/reject-group', payload);
+      return response.data;
+    });
+  },
+  updateManagedNote: async (noteId, payload) => {
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.patch(`/admin/notes/${noteId}`, payload);
+      return response.data;
+    });
+  },
+};
+
+export const directeurApi = {
+  workflowNotes: async (params = {}) => {
+    const response = await api.get('/directeur/notes/workflow', { params });
+    return response.data;
+  },
+  validateNotesGroup: async (payload) => {
+    const response = await api.post('/directeur/notes/validate-group', payload);
+    return response.data;
+  },
+  rejectNotesGroup: async (payload) => {
+    const response = await api.post('/directeur/notes/reject-group', payload);
+    return response.data;
+  },
+  updateManagedNote: async (noteId, payload) => {
+    const response = await api.patch(`/directeur/notes/${noteId}`, payload);
+    return response.data;
+  },
 };
 
 export const professeurApi = {
@@ -295,6 +344,14 @@ export const professeurApi = {
   },
   saveNotes: async (payload) => {
     const response = await api.post('/professeur/notes', payload);
+    return response.data;
+  },
+  saveNotesBatch: async (payload) => {
+    const response = await api.post('/professeur/notes/batch', payload);
+    return response.data;
+  },
+  submitNotesBatch: async (payload) => {
+    const response = await api.post('/professeur/notes/submit', payload);
     return response.data;
   },
   updateNote: async (noteId, payload) => {

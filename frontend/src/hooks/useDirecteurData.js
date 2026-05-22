@@ -10,8 +10,8 @@ const mockDashboard = {
   },
   charts: {
     lowest_modules: [
-      { nom: 'DÃ©veloppement', average_note: 11.2 },
-      { nom: 'RÃ©seaux', average_note: 12.0 },
+      { nom: 'Développement', average_note: 11.2 },
+      { nom: 'Réseaux', average_note: 12.0 },
       { nom: 'Gestion', average_note: 10.8 },
     ],
     results_evolution: [
@@ -21,16 +21,16 @@ const mockDashboard = {
       { period: 'Avr', average_note: 14.1 },
     ],
     performance_by_filiere: [
-      { nom: 'DÃ©veloppement', average_note: 17.2 },
+      { nom: 'Développement', average_note: 17.2 },
       { nom: 'Gestion', average_note: 15.1 },
-      { nom: 'RÃ©seaux', average_note: 14.6 },
+      { nom: 'Réseaux', average_note: 14.6 },
       { nom: 'Design', average_note: 16.0 },
     ],
   },
   recent_activities: [
-    { id: 1, message: 'Note validÃ©e par le professeur', created_at: new Date().toISOString(), type: 'Valide' },
-    { id: 2, message: 'Emploi du temps mis Ã  jour', created_at: new Date().toISOString(), type: 'Planning' },
-    { id: 3, message: 'Nouvelle notification envoyÃ©e', created_at: new Date().toISOString(), type: 'Info' },
+    { id: 1, message: 'Note validée par le professeur', created_at: new Date().toISOString(), type: 'Valide' },
+    { id: 2, message: 'Emploi du temps mis à jour', created_at: new Date().toISOString(), type: 'Planning' },
+    { id: 3, message: 'Nouvelle notification envoyée', created_at: new Date().toISOString(), type: 'Info' },
   ],
 };
 

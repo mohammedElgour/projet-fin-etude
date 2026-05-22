@@ -4,6 +4,8 @@ namespace Database\Factories;
 
 use App\Models\Module;
 use App\Models\Note;
+use App\Models\NoteSubmission;
+use App\Models\Professeur;
 use App\Models\Stagiaire;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -26,14 +28,30 @@ class NoteFactory extends Factory
      */
     public function definition(): array
     {
-        $status = $this->faker->randomElement(['pending', 'validated', 'rejected']);
+        $status = $this->faker->randomElement(['draft', 'submitted', 'validated', 'rejected']);
         $cc1 = $this->faker->randomFloat(2, 0, 20);
         $cc2 = $this->faker->randomFloat(2, 0, 20);
         $cc3 = $this->faker->randomFloat(2, 0, 20);
         $efm = $this->faker->randomFloat(2, 0, 20);
         $average = round((($cc1 + $cc2 + $cc3 + ($efm * 2)) / 5), 2);
 
-        return [
+        return Note::prepareWorkflowAttributes([
+            'submission_id' => function (array $attributes) {
+                $teacher = Professeur::query()->first() ?? Professeur::factory()->create();
+                $student = Stagiaire::query()->find($attributes['stagiaire_id']);
+
+                return NoteSubmission::query()->firstOrCreate(
+                    [
+                        'groupe_id' => $student?->groupe_id,
+                        'module_id' => $attributes['module_id'],
+                    ],
+                    [
+                        'teacher_id' => $teacher->id,
+                        'status' => NoteSubmission::STATUS_PENDING,
+                        'submitted_at' => now(),
+                    ]
+                )->id;
+            },
             'stagiaire_id' => Stagiaire::factory(),
             'module_id' => Module::factory(),
             'cc1' => $cc1,
@@ -41,10 +59,9 @@ class NoteFactory extends Factory
             'cc3' => $cc3,
             'efm' => $efm,
             'note' => $average,
-            'is_validated' => $status === 'validated',
-            'validation_status' => $status,
+            'status' => $status,
             'feedback' => $status === 'rejected' ? 'Veuillez verifier cette note.' : null,
-            'reviewed_at' => $status === 'pending' ? null : now(),
-        ];
+            'reviewed_at' => in_array($status, ['validated', 'rejected'], true) ? now() : null,
+        ]);
     }
 }

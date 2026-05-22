@@ -38,8 +38,6 @@ class ProfesseurSeeder extends Seeder
                 ]
             );
 
-            // Attach pivot data so professeur can access only assigned modules/groupes.
-            // Demo mapping based on your example data.
             if ($user->email === 'prof@ista.test') {
                 $moduleIds = $this->findModuleIdsByCodes($modules, ['M104', 'M105', 'M106', 'M107'], $filiere?->id);
                 $groupeIds = $this->findGroupeIds($groupes, ['DD101', 'DD102']);
@@ -70,18 +68,6 @@ class ProfesseurSeeder extends Seeder
         );
     }
 
-    private function findModuleIds(Collection $modules, array $expectedModuleNames): array
-    {
-        $expectedKeys = array_map(fn ($n) => strtolower(trim($n)), $expectedModuleNames);
-
-        return $modules
-            ->filter(function (Module $module) use ($expectedKeys) {
-                return in_array(strtolower(trim((string) $module->nom)), $expectedKeys, true);
-            })
-            ->pluck('id')
-            ->all();
-    }
-
     private function findModuleIdsByCodes(Collection $modules, array $expectedCodes, ?int $filiereId = null): array
     {
         $expectedKeys = array_map(fn ($code) => strtolower(trim($code)), $expectedCodes);
@@ -97,7 +83,7 @@ class ProfesseurSeeder extends Seeder
 
     private function findGroupeIds(Collection $groupes, array $expectedGroupeNames): array
     {
-        $expectedKeys = array_map(fn ($n) => strtolower(trim($n)), $expectedGroupeNames);
+        $expectedKeys = array_map(fn ($name) => strtolower(trim($name)), $expectedGroupeNames);
 
         return $groupes
             ->filter(function (Groupe $groupe) use ($expectedKeys) {

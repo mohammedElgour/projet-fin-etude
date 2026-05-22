@@ -53,16 +53,31 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/timetables', [AdminTimetableController::class, 'store']);
         Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
 
+        Route::get('/note-submissions', [NoteValidationController::class, 'submissionsIndex']);
+        Route::get('/note-submissions/{submission}', [NoteValidationController::class, 'showSubmission']);
         Route::get('/notes/pending', [NoteValidationController::class, 'indexPending']);
+        Route::get('/notes/workflow', [NoteValidationController::class, 'workflow']);
         Route::patch('/notes/{note}/validate', [NoteValidationController::class, 'validateNote']);
         Route::patch('/notes/{note}/reject', [NoteValidationController::class, 'rejectNote']);
+        Route::post('/notes/validate-group', [NoteValidationController::class, 'validateGroup']);
+        Route::post('/notes/reject-group', [NoteValidationController::class, 'rejectGroup']);
+        Route::patch('/notes/{note}', [NoteValidationController::class, 'updateManagedNote']);
 
         Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats']);
+    });
+
+    Route::middleware('role:admin')->prefix('directeur')->group(function () {
+        Route::get('/notes/workflow', [NoteValidationController::class, 'workflow']);
+        Route::post('/notes/validate-group', [NoteValidationController::class, 'validateGroup']);
+        Route::post('/notes/reject-group', [NoteValidationController::class, 'rejectGroup']);
+        Route::patch('/notes/{note}', [NoteValidationController::class, 'updateManagedNote']);
     });
 
     // Professeur
     Route::middleware('role:professeur')->prefix('professeur')->group(function () {
         Route::get('/notes', [ProfNoteController::class, 'index']);
+        Route::post('/notes/batch', [ProfNoteController::class, 'saveBatch']);
+        Route::post('/notes/submit', [ProfNoteController::class, 'submitBatch']);
         Route::post('/notes', [ProfNoteController::class, 'storeOrUpdate']);
         Route::patch('/notes/{note}', [ProfNoteController::class, 'update']);
 

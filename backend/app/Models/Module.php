@@ -58,6 +58,11 @@ class Module extends Model
         return $this->hasMany(Note::class);
     }
 
+    public function noteSubmissions(): HasMany
+    {
+        return $this->hasMany(NoteSubmission::class);
+    }
+
     protected $table = 'modules';
 
     public function professeurs()
@@ -66,4 +71,3 @@ class Module extends Model
             ->withTimestamps();
     }
 }
-

@@ -12,7 +12,7 @@ const getRequestErrorMessage = (err, fallbackError) => {
 
 export const useAdminDashboardData = () => {
   const [stats, setStats] = useState(null);
-  const [pendingNotes, setPendingNotes] = useState([]);
+  const [noteSubmissions, setNoteSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const loadingRef = useRef(false);
@@ -27,26 +27,36 @@ export const useAdminDashboardData = () => {
     setError('');
 
     try {
-      const [statsRes, pendingRes] = await Promise.all([
+      const [statsResult, submissionsResult] = await Promise.allSettled([
         adminApi.dashboardStats(),
-        adminApi.pendingNotes(),
+        adminApi.noteSubmissions(),
       ]);
 
-      // Debug: inspect raw API payloads
-      console.log('[AdminDashboard] dashboardStats() raw:', statsRes);
-      console.log('[AdminDashboard] pendingNotes() raw:', pendingRes);
+      const nextErrors = [];
 
-      // Normalize: sometimes axios returns {data: {...}} or directly {...}
-      const normalizedStats = statsRes?.kpis || statsRes?.charts ? statsRes : statsRes?.data || {};
-      const normalizedPending = Array.isArray(pendingRes)
-        ? pendingRes
-        : pendingRes?.data || pendingRes?.results || [];
+      if (statsResult.status === 'fulfilled') {
+        const statsRes = statsResult.value;
+        const normalizedStats = statsRes?.kpis || statsRes?.charts ? statsRes : statsRes?.data || {};
+        setStats(normalizedStats);
+      } else {
+        setStats(null);
+        nextErrors.push(getRequestErrorMessage(statsResult.reason, 'Impossible de charger les statistiques admin.'));
+      }
 
-      setStats(normalizedStats);
-      setPendingNotes(normalizedPending);
+      if (submissionsResult.status === 'fulfilled') {
+        const submissionsRes = submissionsResult.value;
+        const normalizedSubmissions = Array.isArray(submissionsRes)
+          ? submissionsRes
+          : submissionsRes?.data || submissionsRes?.results || [];
+        setNoteSubmissions(normalizedSubmissions);
+      } else {
+        setNoteSubmissions([]);
+        nextErrors.push(getRequestErrorMessage(submissionsResult.reason, 'Impossible de charger les soumissions de notes.'));
+      }
 
-    } catch (err) {
-      setError(err?.response?.data?.message || 'Impossible de charger le tableau de bord admin.');
+      if (nextErrors.length) {
+        setError(nextErrors.join(' '));
+      }
     } finally {
       loadingRef.current = false;
       setLoading(false);
@@ -71,7 +81,8 @@ export const useAdminDashboardData = () => {
 
   return {
     stats,
-    pendingNotes,
+    noteSubmissions,
+    pendingNotes: noteSubmissions,
     loading,
     error,
     reload: loadData,

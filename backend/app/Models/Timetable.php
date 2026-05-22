@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Facades\Storage;
 
 class Timetable extends Model
 {
@@ -45,6 +44,16 @@ class Timetable extends Model
             return null;
         }
 
-        return Storage::disk('public')->url($this->image_path);
+        if (preg_match('/^https?:\/\//i', $this->image_path)) {
+            return $this->image_path;
+        }
+
+        $path = ltrim($this->image_path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            return asset($path);
+        }
+
+        return asset('storage/' . $path);
     }
 }

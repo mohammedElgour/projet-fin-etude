@@ -17,11 +17,13 @@ class StudentPortalController extends Controller
         $user = $request->user();
         $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
-        $notes = Note::with('module')
+        $notesQuery = Note::with('module')
             ->where('stagiaire_id', $stagiaire->id)
-            ->where('validation_status', 'validated')
-            ->orderByDesc('created_at')
-            ->get();
+            ->orderByDesc('created_at');
+
+        Note::applyWorkflowStatusFilter($notesQuery, Note::STATUS_VALIDATED);
+
+        $notes = $notesQuery->get();
 
         return response()->json($notes);
     }
@@ -54,9 +56,10 @@ class StudentPortalController extends Controller
         $user = $request->user();
         $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
-        $average = Note::where('stagiaire_id', $stagiaire->id)
-            ->where('validation_status', 'validated')
-            ->avg('note');
+        $averageQuery = Note::query()->where('stagiaire_id', $stagiaire->id);
+        Note::applyWorkflowStatusFilter($averageQuery, Note::STATUS_VALIDATED);
+
+        $average = $averageQuery->avg('note');
         $average = $average ? round((float) $average, 2) : 0.0;
 
         $status = $average >= 14 ? 'good_performance' : 'needs_improvement';
