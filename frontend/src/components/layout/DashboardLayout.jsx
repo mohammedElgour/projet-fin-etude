@@ -27,6 +27,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { authApi, setAuthToken } from '../../services/api';
+import { notificationApi } from '../../services/api';
+import NotificationBell from '../common/NotificationBell';
 import SidebarItem from './SidebarItem';
 
 const baseRouteByRole = {
@@ -34,13 +36,6 @@ const baseRouteByRole = {
   professeur: '/dashboard/professeur',
   stagiaire: '/dashboard/stagiaire',
   directeur: '/dashboard/directeur',
-};
-
-const alertRouteByRole = {
-  admin: '/dashboard/admin/notifications',
-  professeur: '/dashboard/professeur/notifications',
-  stagiaire: '/dashboard/stagiaire/announcements',
-  directeur: '/dashboard/directeur/notifications',
 };
 
 const sidebarConfig = {
@@ -306,7 +301,8 @@ const sidebarConfig = {
         key: 'system',
         label: 'System',
         items: [
-          { key: 'announcements', label: 'Annonces', icon: Bell, path: '/dashboard/stagiaire/announcements' },
+          { key: 'announcements', label: 'Notifications', icon: Bell, path: '/dashboard/stagiaire/announcements' },
+          { key: 'profile', label: 'Profil', icon: User, path: '/dashboard/stagiaire/profile' },
           { key: 'settings', label: 'Settings', icon: Settings, path: '/dashboard/stagiaire/settings' },
         ],
       },
@@ -329,8 +325,8 @@ const sidebarConfig = {
       },
       '/dashboard/stagiaire/announcements': {
         eyebrow: 'Messages',
-        title: 'Annonces',
-        description: 'Consultez vos annonces hors du dashboard.',
+        title: 'Notifications',
+        description: 'Consultez, filtrez et organisez vos notifications hors du dashboard.',
       },
       '/dashboard/stagiaire/profile': {
         eyebrow: 'Compte',
@@ -366,6 +362,7 @@ const SidebarSection = ({ label, items, collapsed, role, onClose }) => {
             collapsed={collapsed}
             onClick={onClose}
             end={item.path === baseRouteByRole[role]}
+            badge={item.badge}
           />
         ))}
       </div>
@@ -375,12 +372,13 @@ const SidebarSection = ({ label, items, collapsed, role, onClose }) => {
 
 const SidebarContent = ({
   role,
+  overrideConfig,
   collapsed = false,
   mobile = false,
   onClose,
   onToggleCollapse,
 }) => {
-  const config = sidebarConfig[role] || sidebarConfig.stagiaire;
+  const config = overrideConfig || sidebarConfig[role] || sidebarConfig.stagiaire;
 
   return (
     <div
@@ -426,12 +424,55 @@ const DashboardLayout = ({ role, actions }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const profileMenuRef = useRef(null);
 
   const config = sidebarConfig[role] || sidebarConfig.stagiaire;
+  const decoratedConfig = useMemo(() => {
+    if (role !== 'stagiaire') {
+      return config;
+    }
+
+    return {
+      ...config,
+      sections: config.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) =>
+          item.key === 'announcements'
+            ? {
+                ...item,
+                label: `Notifications${unreadCount ? ` (${unreadCount})` : ''}`,
+                badge: unreadCount,
+              }
+            : item
+        ),
+      })),
+    };
+  }, [config, role, unreadCount]);
   const pageMeta = config.pages[location.pathname] || config.pages[baseRouteByRole[role]];
   const userName = useMemo(() => user?.name || user?.email || 'Utilisateur', [user]);
   const userInitial = useMemo(() => userName.charAt(0).toUpperCase(), [userName]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    notificationApi
+      .unreadCount()
+      .then((payload) => {
+        if (isMounted) {
+          setUnreadCount(Number(payload?.count || 0));
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setUnreadCount(0);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     setProfileMenuOpen(false);
@@ -484,6 +525,7 @@ const DashboardLayout = ({ role, actions }) => {
         >
           <SidebarContent
             role={role}
+            overrideConfig={decoratedConfig}
             collapsed={desktopCollapsed}
             onToggleCollapse={() => setDesktopCollapsed((value) => !value)}
           />
@@ -516,14 +558,7 @@ const DashboardLayout = ({ role, actions }) => {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate(alertRouteByRole[role] || baseRouteByRole[role])}
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/80 bg-white/80 text-slate-600 shadow-[0_14px_30px_-20px_rgba(15,23,42,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-5 w-5" />
-                </button>
+                <NotificationBell />
 
                 <button
                   type="button"
@@ -632,6 +667,7 @@ const DashboardLayout = ({ role, actions }) => {
                 <SidebarContent
                   role={role}
                   mobile
+                  overrideConfig={decoratedConfig}
                 />
               </div>
             </motion.aside>

@@ -9,7 +9,7 @@ use App\Http\Resources\Admin\NoteSubmissionResource;
 use App\Http\Resources\Professeur\ProfessorNoteResource;
 use App\Models\Note;
 use App\Models\NoteSubmission;
-use App\Models\Notification;
+use App\Services\NotificationDeliveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -19,6 +19,10 @@ use Throwable;
 
 class NoteValidationController extends Controller
 {
+    public function __construct(private NotificationDeliveryService $notifications)
+    {
+    }
+
     protected function calculateAverage(array $validated): ?float
     {
         $requiredFields = ['cc1', 'cc2', 'cc3', 'efm'];
@@ -149,17 +153,11 @@ class NoteValidationController extends Controller
     {
         $submission->loadMissing(['notes.stagiaire.user', 'module']);
 
-        foreach ($submission->notes as $note) {
-            $stagiaireUser = optional($note->stagiaire)->user;
-
-            if ($stagiaireUser) {
-                Notification::create([
-                    'user_id' => $stagiaireUser->id,
-                    'message' => str_replace(':module', $submission->module?->nom ?? 'ce module', $messageTemplate),
-                    'is_read' => false,
-                ]);
-            }
-        }
+        $this->notifications->sendToUsers(
+            $submission->notes->pluck('stagiaire.user'),
+            'Validation des notes',
+            str_replace(':module', $submission->module?->nom ?? 'ce module', $messageTemplate)
+        );
     }
 
     protected function approveSubmission(NoteSubmission $submission): NoteSubmission
@@ -186,7 +184,7 @@ class NoteValidationController extends Controller
         $freshSubmission?->loadCount('notes');
 
         if ($freshSubmission) {
-            $this->notifySubmissionStudents($freshSubmission, 'Vos notes du module :module ont ete validees.');
+            $this->notifySubmissionStudents($freshSubmission, 'Vos notes ont été validées');
         }
 
         return $freshSubmission ?? $submission;
@@ -214,10 +212,6 @@ class NoteValidationController extends Controller
 
         $freshSubmission = $submission->fresh(['groupe.filiere', 'module.filiere', 'teacher.user', 'notes.stagiaire.user']);
         $freshSubmission?->loadCount('notes');
-
-        if ($freshSubmission) {
-            $this->notifySubmissionStudents($freshSubmission, 'Les notes du module :module ont ete rejetees pour correction.');
-        }
 
         return $freshSubmission ?? $submission;
     }
@@ -347,11 +341,11 @@ class NoteValidationController extends Controller
 
         $stagiaireUser = optional($note->stagiaire)->user;
         if ($stagiaireUser) {
-            Notification::create([
-                'user_id' => $stagiaireUser->id,
-                'message' => "Votre note du module {$note->module->nom} a ete validee.",
-                'is_read' => false,
-            ]);
+            $this->notifications->sendToUsers(
+                [$stagiaireUser],
+                'Validation des notes',
+                'Vos notes ont été validées'
+            );
         }
 
         return response()->json([
@@ -391,15 +385,6 @@ class NoteValidationController extends Controller
             'efm' => $note->efm,
         ], Note::STATUS_REJECTED, $validated['feedback'] ?? 'Veuillez revoir cette note.'));
         $note->load(['stagiaire.user', 'stagiaire.groupe', 'module']);
-
-        $stagiaireUser = optional($note->stagiaire)->user;
-        if ($stagiaireUser) {
-            Notification::create([
-                'user_id' => $stagiaireUser->id,
-                'message' => "Votre note du module {$note->module->nom} a ete rejetee pour revision.",
-                'is_read' => false,
-            ]);
-        }
 
         return response()->json([
             'message' => 'Note rejected successfully.',

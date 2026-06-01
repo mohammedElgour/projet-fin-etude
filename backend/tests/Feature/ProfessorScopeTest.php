@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Module;
 use App\Models\Note;
 use App\Models\Stagiaire;
+use App\Models\Timetable;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -154,5 +155,48 @@ class ProfessorScopeTest extends TestCase
         $this->assertEquals(9.0, $studentPayload['notes'][0]['efm']);
         $this->assertSame(Note::STATUS_DRAFT, $studentPayload['notes'][0]['status']);
         $this->assertNotNull($studentPayload['notes'][0]['submission_id']);
+    }
+
+    public function test_professor_emploi_du_temps_endpoint_returns_only_authenticated_professor_timetables(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $professorUser = User::where('email', 'prof@ista.test')->firstOrFail();
+        $otherProfessorUser = User::where('email', 'prof2@ista.test')->firstOrFail();
+
+        $professor = $professorUser->professeur;
+        $otherProfessor = $otherProfessorUser->professeur;
+
+        $professorTimetable = Timetable::create([
+            'title' => 'EDT Professeur DD',
+            'image_path' => 'timetables/professeur-dd.png',
+            'groupe_id' => $professor->groupes()->firstOrFail()->id,
+            'created_by' => $professorUser->id,
+        ]);
+        $professorTimetable->professeurs()->sync([$professor->id]);
+
+        $otherTimetable = Timetable::create([
+            'title' => 'EDT Professeur ID',
+            'image_path' => 'timetables/professeur-id.png',
+            'groupe_id' => $otherProfessor->groupes()->firstOrFail()->id,
+            'created_by' => $otherProfessorUser->id,
+        ]);
+        $otherTimetable->professeurs()->sync([$otherProfessor->id]);
+
+        Sanctum::actingAs($professorUser);
+
+        $emploiDuTemps = $this->getJson('/api/professeur/emploi-du-temps')
+            ->assertOk()
+            ->assertJsonStructure([
+                'emploi_du_temps' => [
+                    '*' => ['id', 'title', 'image_path', 'image_url'],
+                ],
+            ])
+            ->json('emploi_du_temps');
+
+        $this->assertCount(1, $emploiDuTemps);
+        $this->assertSame($professorTimetable->id, $emploiDuTemps[0]['id']);
+        $this->assertSame('EDT Professeur DD', $emploiDuTemps[0]['title']);
+        $this->assertNotSame($otherTimetable->id, $emploiDuTemps[0]['id']);
     }
 }

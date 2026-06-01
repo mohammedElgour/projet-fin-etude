@@ -2,9 +2,28 @@ import { useEffect, useMemo, useState } from 'react';
 import { stagiaireApi } from '../services/api';
 import { normalizeCollectionResponse } from '../lib/normalizeCollectionResponse';
 
+const normalizeStagiaireNotes = (payload) => {
+  const rawNotes = Array.isArray(payload) ? payload : Array.isArray(payload?.notes) ? payload.notes : [];
+
+  return rawNotes.map((note) => ({
+    ...note,
+    module:
+      typeof note?.module === 'string'
+        ? { nom: note.module }
+        : note?.module || { nom: 'Module' },
+    cc1: note?.cc1 ?? note?.controle1 ?? null,
+    cc2: note?.cc2 ?? note?.controle2 ?? null,
+    cc3: note?.cc3 ?? note?.controle3 ?? null,
+    controle1: note?.controle1 ?? note?.cc1 ?? null,
+    controle2: note?.controle2 ?? note?.cc2 ?? null,
+    controle3: note?.controle3 ?? note?.cc3 ?? null,
+  }));
+};
+
 export const useStagiaireData = () => {
   const [notes, setNotes] = useState([]);
   const [schedule, setSchedule] = useState([]);
+  const [emploiDuTemps, setEmploiDuTemps] = useState(null);
   const [timetables, setTimetables] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [recommendation, setRecommendation] = useState(null);
@@ -17,9 +36,10 @@ export const useStagiaireData = () => {
       setError('');
 
       try {
-        const [notesRes, scheduleRes, timetableRes, annRes, recoRes] = await Promise.allSettled([
+        const [notesRes, scheduleRes, emploiRes, timetableRes, annRes, recoRes] = await Promise.allSettled([
           stagiaireApi.notes(),
           stagiaireApi.schedule(),
+          stagiaireApi.emploiDuTemps(),
           stagiaireApi.timetables(),
           stagiaireApi.announcements(),
           stagiaireApi.recommendation(),
@@ -28,7 +48,7 @@ export const useStagiaireData = () => {
         const errors = [];
 
         if (notesRes.status === 'fulfilled') {
-          setNotes(Array.isArray(notesRes.value) ? notesRes.value : []);
+          setNotes(normalizeStagiaireNotes(notesRes.value));
         } else {
           setNotes([]);
           errors.push(notesRes.reason?.response?.data?.message || notesRes.reason?.message);
@@ -39,6 +59,13 @@ export const useStagiaireData = () => {
         } else {
           setSchedule([]);
           errors.push(scheduleRes.reason?.response?.data?.message || scheduleRes.reason?.message);
+        }
+
+        if (emploiRes.status === 'fulfilled') {
+          setEmploiDuTemps(emploiRes.value || null);
+        } else {
+          setEmploiDuTemps(null);
+          errors.push(emploiRes.reason?.response?.data?.message || emploiRes.reason?.message);
         }
 
         if (timetableRes.status === 'fulfilled') {
@@ -105,6 +132,8 @@ export const useStagiaireData = () => {
 
   return {
     notes,
+    schedule,
+    emploiDuTemps,
     scheduleItems,
     timetableItems,
     announcements,

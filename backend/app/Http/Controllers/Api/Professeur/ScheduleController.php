@@ -6,12 +6,46 @@ use App\Http\Controllers\Api\Professeur\Concerns\ResolvesProfessorScope;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Professeur\ProfessorScheduleResource;
 use App\Models\EmploiDuTemps;
+use App\Models\Timetable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ScheduleController extends Controller
 {
     use ResolvesProfessorScope;
+
+    public function emploiDuTemps(Request $request): JsonResponse
+    {
+        $professeur = $this->resolveProfessorProfile($request);
+
+        $emploiDuTemps = Timetable::query()
+            ->with(['groupe.filiere'])
+            ->whereHas('professeurs', fn ($query) => $query->where('professeurs.id', $professeur->id))
+            ->latest()
+            ->get()
+            ->map(function (Timetable $timetable) {
+                return [
+                    'id' => $timetable->id,
+                    'title' => $timetable->title,
+                    'image_path' => $timetable->image_path,
+                    'image_url' => $timetable->image_url,
+                    'groupe' => $timetable->groupe ? [
+                        'id' => $timetable->groupe->id,
+                        'nom' => $timetable->groupe->nom,
+                        'filiere' => $timetable->groupe->filiere ? [
+                            'id' => $timetable->groupe->filiere->id,
+                            'nom' => $timetable->groupe->filiere->nom,
+                        ] : null,
+                    ] : null,
+                    'created_at' => optional($timetable->created_at)?->toISOString(),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'emploi_du_temps' => $emploiDuTemps,
+        ]);
+    }
 
     public function index(Request $request): JsonResponse
     {

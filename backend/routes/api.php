@@ -39,8 +39,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Shared notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/mark-as-read', [NotificationController::class, 'markAsReadByPayload']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::middleware('role:admin')->get('/groupes', [\App\Http\Controllers\Api\Admin\GroupeController::class, 'index']);
 
     // Admin (Directeur)
     Route::middleware('role:admin')->prefix('admin')->group(function () {
@@ -52,6 +55,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/timetables', [AdminTimetableController::class, 'index']);
         Route::post('/timetables', [AdminTimetableController::class, 'store']);
         Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
+        Route::post('/timetables/{timetable}', [AdminTimetableController::class, 'update']);
+        Route::delete('/timetables/{timetable}', [AdminTimetableController::class, 'destroy']);
 
         Route::get('/note-submissions', [NoteValidationController::class, 'submissionsIndex']);
         Route::get('/note-submissions/{submission}', [NoteValidationController::class, 'showSubmission']);
@@ -64,6 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/notes/{note}', [NoteValidationController::class, 'updateManagedNote']);
 
         Route::get('/dashboard/stats', [AdminDashboardController::class, 'stats']);
+        Route::post('/notifications', [NotificationController::class, 'store']);
     });
 
     Route::middleware('role:admin')->prefix('directeur')->group(function () {
@@ -86,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/students', [ProfStudentController::class, 'index']);
         Route::get('/catalog', [ProfStudentController::class, 'catalog']);
+        Route::get('/emploi-du-temps', [ProfScheduleController::class, 'emploiDuTemps']);
         Route::get('/schedule', [ProfScheduleController::class, 'index']);
         Route::get('/timetables', [AdminTimetableController::class, 'index']);
         Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
@@ -94,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Stagiaire
     Route::middleware('role:stagiaire')->prefix('stagiaire')->group(function () {
         Route::get('/notes', [StudentPortalController::class, 'notes']);
+        Route::get('/emploi-du-temps', [StudentPortalController::class, 'emploiDuTemps']);
         Route::get('/schedule', [StudentPortalController::class, 'schedule']);
         Route::get('/timetables', [AdminTimetableController::class, 'index']);
         Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);

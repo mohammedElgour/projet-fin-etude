@@ -9,11 +9,12 @@ import { adminApi } from '../services/api';
 
 const createInitialForm = () => ({
   title: '',
-  audienceType: 'groupe',
-  groupeId: '',
-  professeurId: '',
+  groupIds: [],
   image: null,
 });
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 const buildAudienceLabel = (timetable) => {
   if (timetable.audience_type === 'professeurs') {
@@ -24,15 +25,25 @@ const buildAudienceLabel = (timetable) => {
     return names.length ? names.join(', ') : 'Professeur';
   }
 
-  const groupName = timetable.groupe?.nom || 'Groupe';
-  const filiereName = timetable.groupe?.filiere?.nom || timetable.groupe?.filier?.nom || '';
+  const groups = Array.isArray(timetable.groupes) && timetable.groupes.length
+    ? timetable.groupes
+    : timetable.groupe
+      ? [timetable.groupe]
+      : [];
+
+  if (groups.length > 1) {
+    return groups.map((group) => group.nom).join(', ');
+  }
+
+  const groupName = groups[0]?.nom || 'Groupe';
+  const filiereName = groups[0]?.filiere?.nom || groups[0]?.filier?.nom || '';
 
   return filiereName ? `${groupName} - ${filiereName}` : groupName;
 };
 
 const AdminTimetablePage = () => {
   const toast = useToast();
-  const lookups = useAdminLookups(['groups', 'professors']);
+  const lookups = useAdminLookups(['groups']);
   const { items, loading, error, reload } = useAdminResourceList(
     () => adminApi.timetables(),
     "Impossible de charger les emplois du temps partages."
@@ -41,6 +52,8 @@ const AdminTimetablePage = () => {
   const [formValues, setFormValues] = useState(createInitialForm);
   const [previewUrl, setPreviewUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingTimetable, setEditingTimetable] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     if (!formValues.image) {
@@ -56,30 +69,22 @@ const AdminTimetablePage = () => {
     };
   }, [formValues.image]);
 
-  const professorOptions = useMemo(
-    () =>
-      (lookups.professors || []).map((professor) => ({
-        id: String(professor.id),
-        label:
-          `${professor.user?.first_name || ''} ${professor.user?.last_name || ''}`.trim() ||
-          professor.user?.name ||
-          'Professeur',
-        meta: professor.specialite || '',
-      })),
-    [lookups.professors]
-  );
-
   const timetableRows = useMemo(
     () =>
       items.map((timetable) => ({
         id: timetable.id,
         title: timetable.title || 'Emploi du temps',
         audience: buildAudienceLabel(timetable),
-        createdBy: timetable.creator?.name || '-',
+        createdBy: timetable.uploader?.name || timetable.creator?.name || '-',
         createdAt: timetable.created_at
           ? new Date(timetable.created_at).toLocaleDateString('fr-FR')
           : '-',
         imageUrl: timetable.image_url,
+        groups: Array.isArray(timetable.groupes) && timetable.groupes.length
+          ? timetable.groupes
+          : timetable.groupe
+            ? [timetable.groupe]
+            : [],
         _raw: timetable,
       })),
     [items]
@@ -91,7 +96,7 @@ const AdminTimetablePage = () => {
         id: timetable.id,
         title: timetable.title || 'Emploi du temps',
         imageUrl: timetable.image_url,
-        groupe: timetable.groupe?.nom || '-',
+        groupe: buildAudienceLabel(timetable),
         filiere: timetable.groupe?.filiere?.nom || timetable.groupe?.filier?.nom || '-',
         audienceType: timetable.audience_type,
         professeurs: Array.isArray(timetable.professeurs)
@@ -105,53 +110,82 @@ const AdminTimetablePage = () => {
     [items]
   );
 
-  const handleAudienceChange = (audienceType) => {
+  const toggleGroup = (groupId) => {
     setFormValues((current) => ({
       ...current,
-      audienceType,
-      groupeId: audienceType === 'groupe' ? current.groupeId : '',
-      professeurId: audienceType === 'professeurs' ? current.professeurId : '',
+      groupIds: current.groupIds.includes(String(groupId))
+        ? current.groupIds.filter((id) => id !== String(groupId))
+        : [...current.groupIds, String(groupId)],
     }));
   };
 
   const resetForm = () => {
     setFormValues(createInitialForm());
     setPreviewUrl('');
+    setEditingTimetable(null);
+  };
+
+  const handleImageChange = (file) => {
+    if (!file) {
+      setFormValues((current) => ({ ...current, image: null }));
+      return;
+    }
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error('Format non accepte', 'Utilisez une image JPG, JPEG, PNG ou WEBP.');
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error('Image trop volumineuse', 'La taille maximale autorisee est de 5 Mo.');
+      return;
+    }
+
+    setFormValues((current) => ({ ...current, image: file }));
+  };
+
+  const handleEdit = (row) => {
+    const timetable = row._raw;
+    setEditingTimetable(timetable);
+    setFormValues({
+      title: timetable.title || '',
+      groupIds: (row.groups || []).map((group) => String(group.id)),
+      image: null,
+    });
+    setPreviewUrl('');
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!formValues.image) {
+    if (!editingTimetable && !formValues.image) {
       toast.error('Image requise', "Ajoutez une image avant d'envoyer l'emploi du temps.");
       return;
     }
 
-    if (formValues.audienceType === 'groupe' && !formValues.groupeId) {
-      toast.error('Groupe requis', 'Selectionnez un groupe destinataire.');
-      return;
-    }
-
-    if (formValues.audienceType === 'professeurs' && !formValues.professeurId) {
-      toast.error('Professeur requis', 'Selectionnez un professeur.');
+    if (!formValues.groupIds.length) {
+      toast.error('Groupe requis', 'Selectionnez au moins un groupe destinataire.');
       return;
     }
 
     const payload = new FormData();
     payload.append('title', formValues.title);
-    payload.append('image', formValues.image);
-
-    if (formValues.audienceType === 'groupe') {
-      payload.append('groupe_id', formValues.groupeId);
-    } else {
-      payload.append('professeur_id', formValues.professeurId);
+    if (formValues.image) {
+      payload.append('image', formValues.image);
     }
+
+    formValues.groupIds.forEach((groupId) => payload.append('groupe_ids[]', groupId));
 
     setSubmitting(true);
 
     try {
-      await adminApi.createTimetable(payload);
-      toast.success('Emploi du temps partage', 'Le document est maintenant disponible pour les destinataires.');
+      if (editingTimetable) {
+        await adminApi.updateTimetable(editingTimetable.id, payload);
+        toast.success('Emploi du temps remplace', 'Les groupes selectionnes verront la nouvelle version.');
+      } else {
+        await adminApi.createTimetable(payload);
+        toast.success('Emploi du temps partage', 'Le document est maintenant disponible pour les groupes.');
+      }
       resetForm();
       await reload();
     } catch (submitError) {
@@ -166,13 +200,33 @@ const AdminTimetablePage = () => {
     }
   };
 
+  const handleDelete = async (row) => {
+    setDeletingId(row.id);
+
+    try {
+      await adminApi.deleteTimetable(row.id);
+      toast.success('Emploi du temps supprime', 'Le document ne sera plus affiche aux groupes associes.');
+      await reload();
+      if (editingTimetable?.id === row.id) {
+        resetForm();
+      }
+    } catch (deleteError) {
+      toast.error(
+        'Suppression impossible',
+        deleteError?.response?.data?.message || "Impossible de supprimer l'emploi du temps."
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <section className="rounded-[28px] border border-white/70 bg-white/80 p-5 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/70 md:p-6">
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-slate-950 dark:text-white">Partager un emploi du temps</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Envoyez une image a un groupe complet ou a un professeur sans sortir des conventions du dashboard.
+            Envoyez une image a un ou plusieurs groupes. Les stagiaires verront automatiquement le planning de leur groupe.
           </p>
         </div>
 
@@ -191,81 +245,50 @@ const AdminTimetablePage = () => {
 
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Destinataires</label>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => handleAudienceChange('groupe')}
-                  className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                    formValues.audienceType === 'groupe'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
-                      : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
-                  }`}
-                >
-                  Un groupe
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAudienceChange('professeurs')}
-                  className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                    formValues.audienceType === 'professeurs'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
-                      : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
-                  }`}
-                >
-                  Un professeur
-                </button>
-              </div>
-            </div>
+              <div className="grid max-h-64 gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950 sm:grid-cols-2">
+                {(lookups.groups || []).map((group) => {
+                  const groupId = String(group.id);
+                  const checked = formValues.groupIds.includes(groupId);
 
-            {formValues.audienceType === 'groupe' ? (
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Groupe</label>
-                <select
-                  value={formValues.groupeId}
-                  onChange={(event) => setFormValues((current) => ({ ...current, groupeId: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/15"
-                >
-                  <option value="">Selectionner un groupe</option>
-                  {(lookups.groups || []).map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.nom} - {group.filiere?.nom || group.filier?.nom || 'Filiere'}
-                    </option>
-                  ))}
-                </select>
+                  return (
+                    <label
+                      key={group.id}
+                      className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm transition ${
+                        checked
+                          ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-500/10 dark:text-blue-200'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleGroup(groupId)}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-semibold">{group.nom}</span>
+                        <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                          {group.filiere?.nom || group.filier?.nom || 'Filiere'}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
-            ) : (
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Professeur</label>
-                <select
-                  value={formValues.professeurId}
-                  onChange={(event) =>
-                    setFormValues((current) => ({ ...current, professeurId: event.target.value }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/15"
-                >
-                  <option value="">Selectionner un professeur</option>
-                  {professorOptions.map((professor) => (
-                    <option key={professor.id} value={professor.id}>
-                      {professor.label}{professor.meta ? ` - ${professor.meta}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                {formValues.groupIds.length} groupe(s) selectionne(s)
+              </p>
+            </div>
 
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Image</label>
               <input
                 type="file"
-                accept="image/*"
-                onChange={(event) =>
-                  setFormValues((current) => ({
-                    ...current,
-                    image: event.target.files?.[0] || null,
-                  }))
-                }
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                onChange={(event) => handleImageChange(event.target.files?.[0] || null)}
                 className="block w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:font-medium file:text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:file:bg-slate-900 dark:file:text-slate-200"
               />
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">JPG, JPEG, PNG ou WEBP. Taille maximale: 5 Mo.</p>
             </div>
 
             <div className="md:col-span-2 flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -273,7 +296,7 @@ const AdminTimetablePage = () => {
                 Reinitialiser
               </ActionButton>
               <ActionButton type="submit" variant="primary" loading={submitting} disabled={submitting}>
-                Partager l&apos;emploi du temps
+                {editingTimetable ? "Remplacer l'emploi du temps" : "Partager l'emploi du temps"}
               </ActionButton>
             </div>
           </div>
@@ -335,7 +358,9 @@ const AdminTimetablePage = () => {
           loading={loading}
           error={error}
           emptyMessage="Aucun emploi du temps partage"
-          hideActions
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          actionStates={{ delete: Boolean(deletingId), activeId: deletingId }}
         />
       </section>
 

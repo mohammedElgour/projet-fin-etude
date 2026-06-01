@@ -105,13 +105,20 @@ export const notificationApi = {
     const response = await api.get('/notifications');
     return response.data;
   },
+  unreadCount: async () => {
+    const response = await api.get('/notifications/unread-count');
+    return response.data;
+  },
   markRead: async (notificationId) => {
-    const response = await api.patch(`/notifications/${notificationId}/read`);
+    const response = await api.post('/notifications/mark-as-read', { notification_id: notificationId });
     return response.data;
   },
   markAllRead: async () => {
     const response = await api.patch('/notifications/read-all');
     return response.data;
+  },
+  deleteLocal: async (notificationId) => {
+    return { id: notificationId, deleted: true };
   },
 };
 
@@ -228,6 +235,10 @@ export const adminApi = {
     const response = await api.get('/admin/groupes', { params });
     return response.data;
   },
+  notificationGroups: async (params = {}) => {
+    const response = await api.get('/groupes', { params });
+    return response.data;
+  },
   group: async (id) => {
     const response = await api.get(`/admin/groupes/${id}`);
     return response.data;
@@ -264,6 +275,18 @@ export const adminApi = {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+  updateTimetable: async (id, payload) => {
+    const response = await api.post(`/admin/timetables/${id}`, payload, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+  deleteTimetable: async (id) => {
+    const response = await api.delete(`/admin/timetables/${id}`);
     return response.data;
   },
   noteSubmissions: async (params = {}) => {
@@ -311,6 +334,10 @@ export const adminApi = {
       const response = await api.patch(`/admin/notes/${noteId}`, payload);
       return response.data;
     });
+  },
+  sendNotification: async (payload) => {
+    const response = await api.post('/admin/notifications', payload);
+    return response.data;
   },
 };
 
@@ -387,6 +414,10 @@ export const stagiaireApi = {
   },
   schedule: async () => {
     const response = await api.get('/stagiaire/schedule');
+    return response.data;
+  },
+  emploiDuTemps: async () => {
+    const response = await api.get('/stagiaire/emploi-du-temps');
     return response.data;
   },
   timetables: async () => {

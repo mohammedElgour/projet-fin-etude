@@ -67,6 +67,12 @@ class Groupe extends Model
         return $this->hasMany(Timetable::class);
     }
 
+    public function assignedTimetables(): BelongsToMany
+    {
+        return $this->belongsToMany(Timetable::class, 'groupe_timetable')
+            ->withTimestamps();
+    }
+
     public function professeurs()
     {
         return $this->belongsToMany(Professeur::class, 'professeur_groupe')

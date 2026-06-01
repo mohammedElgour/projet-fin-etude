@@ -21,9 +21,10 @@ class StagiaireController extends Controller
         return trim($firstName.' '.$lastName);
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $stagiaires = Stagiaire::with(['user', 'groupe.filier'])->paginate(15);
+        $perPage = max(1, min($request->integer('per_page', 15), 200));
+        $stagiaires = Stagiaire::with(['user', 'groupe.filier'])->paginate($perPage);
 
         return response()->json($stagiaires);
     }

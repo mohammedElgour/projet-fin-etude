@@ -16,6 +16,7 @@ class Timetable extends Model
         'image_path',
         'groupe_id',
         'created_by',
+        'uploaded_by',
     ];
 
     protected $appends = [
@@ -27,6 +28,12 @@ class Timetable extends Model
         return $this->belongsTo(Groupe::class);
     }
 
+    public function groupes(): BelongsToMany
+    {
+        return $this->belongsToMany(Groupe::class, 'groupe_timetable')
+            ->withTimestamps();
+    }
+
     public function professeurs(): BelongsToMany
     {
         return $this->belongsToMany(Professeur::class, 'timetable_professeur')
@@ -36,6 +43,11 @@ class Timetable extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function uploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'uploaded_by');
     }
 
     public function getImageUrlAttribute(): ?string

@@ -1,171 +1,111 @@
 import React, { useMemo } from 'react';
-import { BellRing, BookOpenText, ChartNoAxesCombined, Clock4 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import {
+  Award,
+  BellRing,
+  BookOpenCheck,
+  CalendarDays,
+  CheckCircle2,
+  GraduationCap,
+  TrendingUp,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-import { BarChart, ChartCard, LineChart, PieChart } from '../components/charts/SimpleCharts';
-import StatCard from '../components/dashboard/StatCard';
+import { useAuth } from '../context/AuthContext';
 import { useStagiaireData } from '../hooks/useStagiaireData';
-
-import SectionHeader from '../components/dashboard/SectionHeader';
-import KpiGrid from '../components/dashboard/KpiGrid';
-import { SkeletonCard, SkeletonLine } from '../components/dashboard/LoadingSkeletons';
-import EmptyState from '../components/dashboard/EmptyState';
+import { PageShell, KpiCard, LoadingPanel, PortalCard } from '../components/stagiaire/StudentPortalCards';
+import { getGradeSummary, getStudentInfo, normalizeScheduleRows, normalizeStudentNotes } from '../components/stagiaire/studentPortalUtils';
+import WeeklySchedule from '../components/stagiaire/WeeklySchedule';
+import PerformanceBars from '../components/stagiaire/PerformanceBars';
 
 const StagiaireDashboard = () => {
-  const { notes, scheduleItems, announcements, recommendation, loading, error } = useStagiaireData();
+  const { user } = useAuth();
+  const { notes, schedule, announcements, loading, error } = useStagiaireData();
 
-  const average = useMemo(() => recommendation?.average ?? 0, [recommendation]);
-
-  const barData = useMemo(
-    () =>
-      notes.length
-        ? notes.map((note) => ({ label: note.module?.nom || 'Module', value: Number(note.note || 0) }))
-        : [
-            { label: 'Algo', value: 13 },
-            { label: 'Web', value: 15 },
-            { label: 'BDD', value: 12 },
-          ],
-    [notes]
-  );
-
-  const lineData = useMemo(() => {
-    const built = notes.map((note, index) => ({
-      label: `Etape ${index + 1}`,
-      value: Number(note.note || 0),
-    }));
-
-    return built.length
-      ? built
-      : [
-          { label: 'S1', value: 11 },
-          { label: 'S2', value: 12.5 },
-          { label: 'S3', value: 14 },
-          { label: 'S4', value: 13.8 },
-        ];
-  }, [notes]);
-
-  const pieData = useMemo(() => {
-    const built = [
-      { label: 'Notes', value: notes.length, color: '#8b5cf6' },
-      { label: 'Creneaux', value: scheduleItems.length, color: '#0ea5e9' },
-      { label: 'Annonces', value: announcements.length, color: '#f97316' },
-    ].filter((item) => item.value > 0);
-
-    return built.length
-      ? built
-      : [
-          { label: 'Notes', value: 4, color: '#8b5cf6' },
-          { label: 'Creneaux', value: 5, color: '#0ea5e9' },
-          { label: 'Annonces', value: 2, color: '#f97316' },
-        ];
-  }, [announcements.length, notes.length, scheduleItems.length]);
+  const student = useMemo(() => getStudentInfo(user), [user]);
+  const normalizedNotes = useMemo(() => normalizeStudentNotes(notes), [notes]);
+  const scheduleRows = useMemo(() => normalizeScheduleRows(schedule).slice(0, 8), [schedule]);
+  const summary = useMemo(() => getGradeSummary(normalizedNotes), [normalizedNotes]);
+  const unreadCount = useMemo(() => announcements.filter((item) => !item.is_read).length, [announcements]);
 
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <SectionHeader
-          eyebrow="ISTA • Student"
-          title="Espace stagiaire"
-          description="Chargement de votre progression et de vos indicateurs…"
-        />
-        <KpiGrid columns="4">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </KpiGrid>
-
-        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-3">
-          <SkeletonLine />
-          <SkeletonLine />
-          <SkeletonLine />
-        </div>
-      </div>
-    );
+    return <LoadingPanel label="Chargement de votre tableau de bord..." />;
   }
 
   return (
-    <div className="space-y-6">
+    <PageShell>
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
           {error}
         </div>
       ) : null}
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        className="space-y-6"
-      >
-        <SectionHeader
-          eyebrow="ISTA • Stagiaire"
-          title="Tableau de bord"
-          description="Vos notes, votre progression et vos informations importantes—au même endroit."
-          actions={
-            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/60 px-3 py-2 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-900/30">
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Aperçu</span>
-            </div>
-          }
-        />
-
-        <KpiGrid columns="4">
-          <StatCard
-            label="Moyenne"
-            value={`${average}/20`}
-            helper="Résumé instantané"
-            accent="from-violet-500 to-fuchsia-500"
-            icon={ChartNoAxesCombined}
-          />
-          <StatCard
-            label="Notes validées"
-            value={notes.length}
-            helper="Modules disponibles"
-            accent="from-sky-500 to-cyan-500"
-            icon={BookOpenText}
-          />
-          <StatCard
-            label="Creneaux planifiés"
-            value={scheduleItems.length}
-            helper="Semaine en cours"
-            accent="from-emerald-500 to-teal-500"
-            icon={Clock4}
-          />
-          <StatCard
-            label="Annonces"
-            value={announcements.length}
-            helper="Informations récentes"
-            accent="from-amber-500 to-orange-500"
-            icon={BellRing}
-          />
-        </KpiGrid>
-
-        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-3">
-          <ChartCard title="Notes par module" subtitle="Bar chart de vos résultats">
-            <BarChart data={barData} color="#8b5cf6" />
-          </ChartCard>
-
-          <ChartCard title="Progression récente" subtitle="Line chart de performance">
-            <LineChart data={lineData} stroke="#10b981" fill="rgba(16, 185, 129, 0.14)" />
-          </ChartCard>
-
-          <ChartCard title="Répartition de votre espace" subtitle="Pie chart entre notes, emploi du temps et annonces">
-            <PieChart data={pieData} />
-          </ChartCard>
-        </div>
-
-        {(!error && notes.length === 0 && scheduleItems.length === 0 && announcements.length === 0) ? (
-          <div className="mt-6">
-            <EmptyState
-              title="Aucune donnée pour le moment"
-              description="Dès que vos notes, créneaux et annonces seront disponibles, ils apparaîtront ici."
-            />
+      <PortalCard className="relative overflow-hidden bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 text-white">
+        <div className="absolute inset-y-0 right-0 w-1/2 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),transparent)]" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-100">Portail stagiaire</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Welcome back, {student.name}</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-50 sm:text-base">
+              {student.filiere} - {student.group}
+            </p>
           </div>
-        ) : null}
-      </motion.div>
-    </div>
+          <div className="grid gap-3 rounded-2xl border border-white/20 bg-white/10 p-4 text-sm backdrop-blur sm:grid-cols-2">
+            <span>Annee: <strong>{student.academicYear}</strong></span>
+            <span>Modules: <strong>{summary.totalModules}</strong></span>
+            <span>Moyenne: <strong>{summary.average}/20</strong></span>
+            <span>Notifications: <strong>{unreadCount}</strong></span>
+          </div>
+        </div>
+      </PortalCard>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KpiCard icon={GraduationCap} value={summary.totalModules} label="Total Modules" helper="Modules avec notes validees" accent="bg-sky-600" progress={100} />
+        <KpiCard icon={TrendingUp} value={`${summary.average}/20`} label="Average Grade" helper="Moyenne generale" accent="bg-emerald-600" progress={(summary.average / 20) * 100} />
+        <KpiCard icon={CheckCircle2} value={summary.passed} label="Modules Validated" helper="Notes superieures a 10" accent="bg-violet-600" progress={summary.totalModules ? (summary.passed / summary.totalModules) * 100 : 0} />
+        <KpiCard icon={BellRing} value={unreadCount} label="Unread Notifications" helper="Messages a consulter" accent="bg-amber-500" progress={announcements.length ? (unreadCount / announcements.length) * 100 : 0} />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <section>
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Apercu de la semaine</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Vos prochains cours organises par jour.</p>
+            </div>
+            <Link to="/dashboard/stagiaire/schedule" className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700">
+              Voir tout
+            </Link>
+          </div>
+          <WeeklySchedule rows={scheduleRows} />
+        </section>
+
+        <div className="space-y-6">
+          <KpiCard icon={Award} value={`${summary.highest}/20`} label="Meilleure note" helper="Votre score le plus eleve" accent="bg-emerald-600" progress={(summary.highest / 20) * 100} />
+          <PortalCard>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+                <BookOpenCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Actions rapides</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Acces direct aux pages utiles.</p>
+              </div>
+            </div>
+            <div className="grid gap-3">
+              <Link to="/dashboard/stagiaire/notes" className="flex items-center gap-3 rounded-2xl border border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900">
+                <BookOpenCheck className="h-4 w-4 text-sky-600" /> Consulter mes notes
+              </Link>
+              <Link to="/dashboard/stagiaire/schedule" className="flex items-center gap-3 rounded-2xl border border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900">
+                <CalendarDays className="h-4 w-4 text-emerald-600" /> Voir l'emploi du temps
+              </Link>
+            </div>
+          </PortalCard>
+        </div>
+      </div>
+
+      {normalizedNotes.length ? <PerformanceBars notes={normalizedNotes.slice(0, 6)} /> : null}
+    </PageShell>
   );
 };
 
 export default StagiaireDashboard;
-

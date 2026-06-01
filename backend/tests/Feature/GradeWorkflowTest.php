@@ -105,13 +105,44 @@ class GradeWorkflowTest extends TestCase
 
         $studentNotes = $this->getJson('/api/stagiaire/notes')
             ->assertOk()
-            ->json();
+            ->assertJsonStructure([
+                'notes' => [
+                    '*' => ['module', 'controle1', 'controle2', 'controle3', 'efm'],
+                ],
+            ])
+            ->json('notes');
 
         $this->assertTrue(
             collect($studentNotes)->contains(
                 fn ($note) => (int) $note['module_id'] === (int) $module->id
                     && $note['validation_status'] === Note::STATUS_VALIDATED
                     && (float) $note['note'] === 13.8
+            )
+        );
+    }
+
+    public function test_student_timetable_endpoint_only_returns_the_authenticated_student_group_schedule(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $studentUser = User::where('email', 'sara@ista.test')->firstOrFail();
+        Sanctum::actingAs($studentUser);
+
+        $studentGroupId = $studentUser->stagiaire->groupe_id;
+
+        $emploiDuTemps = $this->getJson('/api/stagiaire/emploi-du-temps')
+            ->assertOk()
+            ->assertJsonStructure([
+                'emploi_du_temps' => [
+                    '*' => ['id', 'groupe_id', 'date', 'fichier'],
+                ],
+            ])
+            ->json('emploi_du_temps');
+
+        $this->assertNotEmpty($emploiDuTemps);
+        $this->assertTrue(
+            collect($emploiDuTemps)->every(
+                fn ($entry) => (int) $entry['groupe_id'] === (int) $studentGroupId
             )
         );
     }

@@ -12,8 +12,9 @@ use App\Http\Resources\Admin\NoteSubmissionResource;
 use App\Http\Resources\Professeur\ProfessorNoteResource;
 use App\Models\Note;
 use App\Models\NoteSubmission;
-use App\Models\Notification;
 use App\Models\Stagiaire;
+use App\Models\User;
+use App\Services\NotificationDeliveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -22,6 +23,10 @@ use Illuminate\Support\Facades\DB;
 class NoteController extends Controller
 {
     use ResolvesProfessorScope;
+
+    public function __construct(private NotificationDeliveryService $notifications)
+    {
+    }
 
     protected function calculateAverage(array $validated): ?float
     {
@@ -206,13 +211,26 @@ class NoteController extends Controller
     {
         foreach ($notes as $note) {
             if ($note->stagiaire && $note->stagiaire->user) {
-                Notification::create([
-                    'user_id' => $note->stagiaire->user->id,
-                    'message' => str_replace(':module', $note->module->nom, $messageTemplate),
-                    'is_read' => false,
-                ]);
+                $this->notifications->sendToUsers(
+                    [$note->stagiaire->user],
+                    'Notification de notes',
+                    str_replace(':module', $note->module?->nom ?? 'ce module', $messageTemplate)
+                );
             }
         }
+    }
+
+    protected function notifyAdminsAboutSubmittedNotes(): void
+    {
+        $admins = User::query()
+            ->where('role', 'admin')
+            ->get();
+
+        $this->notifications->sendToUsers(
+            $admins,
+            'Soumission des notes',
+            'Les notes ont été soumises et attendent validation'
+        );
     }
 
     public function index(Request $request): JsonResponse
@@ -336,8 +354,6 @@ class NoteController extends Controller
                 ->get();
         });
 
-        $this->notifyStudents($savedNotes, 'Les notes du module :module ont ete mises a jour.');
-
         return response()->json([
             'message' => 'Notes saved successfully as drafts.',
             'count' => $savedNotes->count(),
@@ -407,7 +423,7 @@ class NoteController extends Controller
                 ->get();
         });
 
-        $this->notifyStudents($submittedNotes, 'Les notes du module :module ont ete soumises pour validation.');
+        $this->notifyAdminsAboutSubmittedNotes();
 
         return response()->json([
             'message' => 'Notes submitted successfully.',

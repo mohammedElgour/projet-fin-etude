@@ -21,9 +21,10 @@ class ProfesseurController extends Controller
         return trim($firstName.' '.$lastName);
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $professeurs = Professeur::with(['user', 'filier'])->paginate(15);
+        $perPage = max(1, min($request->integer('per_page', 15), 200));
+        $professeurs = Professeur::with(['user', 'filier'])->paginate($perPage);
 
         return response()->json($professeurs);
     }
