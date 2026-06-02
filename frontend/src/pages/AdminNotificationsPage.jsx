@@ -44,6 +44,7 @@ const AdminNotificationsPage = () => {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
 
   const selectionConfig = useMemo(() => {
     if (target === 'groupes') {
@@ -90,6 +91,22 @@ const AdminNotificationsPage = () => {
 
     return null;
   }, [groupes, professeurs, stagiaires, target]);
+
+  const selectionErrorField = useMemo(() => {
+    if (target === 'groupes') {
+      return 'groupe_ids';
+    }
+
+    if (target === 'stagiaires') {
+      return 'stagiaire_ids';
+    }
+
+    if (target === 'professeurs') {
+      return 'professeur_ids';
+    }
+
+    return 'user_type';
+  }, [target]);
 
   useEffect(() => {
     let mounted = true;
@@ -153,6 +170,7 @@ const AdminNotificationsPage = () => {
     setSelectedIds([]);
     setFeedback('');
     setError('');
+    setValidationErrors({});
   };
 
   const buildPayload = () => {
@@ -184,6 +202,7 @@ const AdminNotificationsPage = () => {
     event.preventDefault();
     setFeedback('');
     setError('');
+    setValidationErrors({});
 
     if (!message.trim()) {
       setError('Saisissez un message.');
@@ -198,7 +217,10 @@ const AdminNotificationsPage = () => {
     setLoading(true);
 
     try {
-      const response = await adminApi.sendNotification(buildPayload());
+      const payload = buildPayload();
+      console.log('Notification payload:', payload);
+
+      const response = await adminApi.sendNotification(payload);
       const count = Number(response?.count ?? 0);
 
       setFeedback(`${response?.message || 'Notifications sent successfully.'} (${count})`);
@@ -207,9 +229,28 @@ const AdminNotificationsPage = () => {
       setSelectedIds([]);
     } catch (error) {
       setError(error?.response?.data?.message || 'Impossible d envoyer les notifications.');
+      setValidationErrors(error?.response?.data?.errors || {});
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderValidationError = (field) => {
+    const messages = validationErrors?.[field];
+
+    if (!messages) {
+      return null;
+    }
+
+    const normalizedMessages = Array.isArray(messages) ? messages : [messages];
+
+    return (
+      <div className="mt-1 space-y-1 text-xs text-rose-600 dark:text-rose-300">
+        {normalizedMessages.map((message, index) => (
+          <p key={`${field}-${index}`}>{message}</p>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -235,23 +276,28 @@ const AdminNotificationsPage = () => {
                 </option>
               ))}
             </select>
+            {renderValidationError('target_type')}
+            {renderValidationError('user_type')}
           </div>
 
           {selectionConfig ? (
-            <SearchableMultiSelect
-              options={selectionConfig.options}
-              selected={selectedIds}
-              onChange={setSelectedIds}
-              placeholder={selectionConfig.placeholder}
-              getOptionLabel={selectionConfig.getLabel}
-              getOptionSearchText={selectionConfig.getSearchText}
-              emptyMessage={selectionConfig.emptyMessage}
-              ariaLabel={selectionConfig.ariaLabel}
-              searchLabel={selectionConfig.searchLabel}
-              selectedLabel={selectionConfig.selectedLabel}
-              availableLabel={selectionConfig.availableLabel}
-              loading={lookupLoading}
-            />
+            <div>
+              <SearchableMultiSelect
+                options={selectionConfig.options}
+                selected={selectedIds}
+                onChange={setSelectedIds}
+                placeholder={selectionConfig.placeholder}
+                getOptionLabel={selectionConfig.getLabel}
+                getOptionSearchText={selectionConfig.getSearchText}
+                emptyMessage={selectionConfig.emptyMessage}
+                ariaLabel={selectionConfig.ariaLabel}
+                searchLabel={selectionConfig.searchLabel}
+                selectedLabel={selectionConfig.selectedLabel}
+                availableLabel={selectionConfig.availableLabel}
+                loading={lookupLoading}
+              />
+              {renderValidationError(selectionErrorField)}
+            </div>
           ) : null}
 
           <div>
@@ -262,6 +308,7 @@ const AdminNotificationsPage = () => {
               onChange={(event) => setTitle(event.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             />
+            {renderValidationError('title')}
           </div>
 
           <div>
@@ -273,6 +320,7 @@ const AdminNotificationsPage = () => {
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
               required
             />
+            {renderValidationError('message')}
           </div>
 
           {feedback ? <p className="text-sm text-emerald-600 dark:text-emerald-400">{feedback}</p> : null}

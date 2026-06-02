@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Common;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\Common\StoreNotificationRequest;
 use App\Models\Notification;
 use App\Services\NotificationDeliveryService;
 use Illuminate\Http\JsonResponse;
@@ -75,20 +76,14 @@ class NotificationController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreNotificationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'target_type' => ['required', 'in:stagiaires,professeurs,groupes,user_type'],
-            'stagiaire_ids' => ['required_if:target_type,stagiaires', 'array', 'min:1'],
-            'stagiaire_ids.*' => ['integer', 'exists:stagiaires,id'],
-            'professeur_ids' => ['required_if:target_type,professeurs', 'array', 'min:1'],
-            'professeur_ids.*' => ['integer', 'exists:professeurs,id'],
-            'groupe_ids' => ['required_if:target_type,groupes', 'array', 'min:1'],
-            'groupe_ids.*' => ['integer', 'exists:groupes,id'],
-            'user_type' => ['required_if:target_type,user_type', 'in:stagiaire,professeur'],
-            'title' => ['nullable', 'string', 'max:255'],
-            'message' => ['required', 'string', 'max:2000'],
+        Log::info('Notification request received', [
+            'payload' => $request->all(),
+            'user' => $request->user()?->id,
         ]);
+
+        $validated = $request->validated();
 
         try {
             $count = match ($validated['target_type']) {
@@ -117,15 +112,27 @@ class NotificationController extends Controller
             Log::error('Admin notification send failed.', [
                 'admin_user_id' => $request->user()?->id,
                 'target_type' => $validated['target_type'],
-                'exception' => $exception,
+                'message' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             return response()->json([
+                'success' => false,
                 'message' => 'Unable to send notifications at the moment.',
             ], 500);
         }
 
+        if ($count === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No recipients found',
+            ], 422);
+        }
+
         return response()->json([
+            'success' => true,
             'message' => 'Notifications sent successfully.',
             'count' => $count,
         ], 201);

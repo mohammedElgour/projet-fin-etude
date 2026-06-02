@@ -128,23 +128,50 @@ class GradeWorkflowTest extends TestCase
         $studentUser = User::where('email', 'sara@ista.test')->firstOrFail();
         Sanctum::actingAs($studentUser);
 
-        $studentGroupId = $studentUser->stagiaire->groupe_id;
+        $studentGroupName = $studentUser->stagiaire->groupe->nom;
+        $studentFiliereName = $studentUser->stagiaire->groupe->filiere->nom;
 
-        $emploiDuTemps = $this->getJson('/api/stagiaire/emploi-du-temps')
+        $response = $this->getJson('/api/stagiaire/emploi-du-temps')
             ->assertOk()
             ->assertJsonStructure([
-                'emploi_du_temps' => [
-                    '*' => ['id', 'groupe_id', 'date', 'fichier'],
-                ],
+                'group',
+                'filiere',
+                'timetable',
             ])
-            ->json('emploi_du_temps');
+            ->assertJson([
+                'group' => $studentGroupName,
+                'filiere' => $studentFiliereName,
+            ]);
 
-        $this->assertNotEmpty($emploiDuTemps);
-        $this->assertTrue(
-            collect($emploiDuTemps)->every(
-                fn ($entry) => (int) $entry['groupe_id'] === (int) $studentGroupId
-            )
-        );
+        $this->assertSame($studentGroupName, $response->json('group'));
+        $this->assertSame($studentFiliereName, $response->json('filiere'));
+        $this->assertNull($response->json('timetable'));
+    }
+
+    public function test_student_timetables_endpoint_returns_a_successful_paginated_response(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $studentUser = User::where('email', 'sara@ista.test')->firstOrFail();
+        Sanctum::actingAs($studentUser);
+
+        $response = $this->getJson('/api/stagiaire/timetables')
+            ->assertOk()
+            ->assertJsonStructure([
+                'current_page',
+                'data',
+                'first_page_url',
+                'from',
+                'last_page',
+                'last_page_url',
+                'links',
+                'path',
+                'per_page',
+                'to',
+                'total',
+            ]);
+
+        $this->assertIsArray($response->json('data'));
     }
 
     public function test_professor_can_save_all_notes_in_batch_as_a_draft_submission(): void

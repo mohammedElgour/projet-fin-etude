@@ -21,6 +21,10 @@ class NotificationDeliveryService
         $recipients = $this->normalizeUsers($users);
 
         if ($recipients->isEmpty()) {
+            Log::warning('Notification send skipped because no recipients were resolved.', [
+                'title' => $title,
+            ]);
+
             return 0;
         }
 
@@ -41,7 +45,10 @@ class NotificationDeliveryService
             Log::error('Failed to create notifications.', [
                 'recipient_user_ids' => $recipients->pluck('id')->all(),
                 'title' => $title,
-                'exception' => $exception,
+                'message' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             throw $exception;

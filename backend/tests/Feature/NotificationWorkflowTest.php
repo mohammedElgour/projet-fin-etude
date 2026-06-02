@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Groupe;
+use App\Models\Filier;
 use App\Models\Notification;
 use App\Models\Stagiaire;
 use App\Models\User;
@@ -233,6 +234,49 @@ class NotificationWorkflowTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('user_type');
+    }
+
+    public function test_admin_notification_validation_returns_structured_json(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Sanctum::actingAs(User::where('email', 'admin@ista.test')->firstOrFail());
+
+        $this->postJson('/api/admin/notifications', [
+            'target_type' => 'user_type',
+            'user_type' => 'professeur',
+            'title' => 'Annonce',
+        ])
+            ->assertUnprocessable()
+            ->assertJson([
+                'success' => false,
+                'message' => 'Validation failed',
+            ])
+            ->assertJsonValidationErrors('message');
+    }
+
+    public function test_admin_notification_returns_no_recipients_found_when_target_has_no_users(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $emptyGroup = Groupe::create([
+            'nom' => 'EMPTY001',
+            'filiere_id' => Filier::firstOrFail()->id,
+        ]);
+
+        Sanctum::actingAs(User::where('email', 'admin@ista.test')->firstOrFail());
+
+        $this->postJson('/api/admin/notifications', [
+            'target_type' => 'groupes',
+            'groupe_ids' => [$emptyGroup->id],
+            'title' => 'Annonce',
+            'message' => 'Aucun destinataire.',
+        ])
+            ->assertUnprocessable()
+            ->assertJson([
+                'success' => false,
+                'message' => 'No recipients found',
+            ]);
     }
 
     public function test_admin_can_send_notifications_to_multiple_selected_groupes_only(): void
