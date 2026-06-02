@@ -547,7 +547,7 @@ const DashboardLayout = ({ role, actions }) => {
             </div>
           </div>
 
-          <header className="surface-panel relative overflow-hidden rounded-[32px] px-5 py-5 sm:px-6 sm:py-6">
+          <header className="surface-panel relative z-40 overflow-visible rounded-[32px] px-5 py-5 sm:px-6 sm:py-6">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.12),transparent_26%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.16),transparent_26%)]" />
             <div className="relative">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
@@ -593,7 +593,7 @@ const DashboardLayout = ({ role, actions }) => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 8 }}
                         transition={{ duration: 0.18 }}
-                        className="surface-panel absolute right-0 top-[calc(100%+0.75rem)] z-30 w-60 rounded-3xl p-2"
+                        className="surface-panel absolute right-0 top-[calc(100%+0.75rem)] z-[60] w-60 rounded-3xl p-2"
                       >
                         <button
                           type="button"
