@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ActionButton from '../components/admin/ActionButton';
+import DeleteConfirmModal from '../components/admin/DeleteConfirmModal';
 import ManagementTable from '../components/admin/ManagementTable';
 import TimetableGrid from '../components/timetable/TimetableGrid';
 import { useToast } from '../context/ToastContext';
@@ -53,7 +54,8 @@ const AdminTimetablePage = () => {
   const [previewUrl, setPreviewUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [editingTimetable, setEditingTimetable] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!formValues.image) {
@@ -132,12 +134,12 @@ const AdminTimetablePage = () => {
     }
 
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      toast.error('Format non accepte', 'Utilisez une image JPG, JPEG, PNG ou WEBP.');
+      toast.warning('Unsupported image format.', 'Use a JPG, JPEG, PNG, or WEBP image.');
       return;
     }
 
     if (file.size > MAX_IMAGE_SIZE) {
-      toast.error('Image trop volumineuse', 'La taille maximale autorisee est de 5 Mo.');
+      toast.warning('Image too large.', 'The maximum allowed file size is 5 MB.');
       return;
     }
 
@@ -159,12 +161,12 @@ const AdminTimetablePage = () => {
     event.preventDefault();
 
     if (!editingTimetable && !formValues.image) {
-      toast.error('Image requise', "Ajoutez une image avant d'envoyer l'emploi du temps.");
+      toast.warning('Image required.', 'Add an image before sharing the timetable.');
       return;
     }
 
     if (!formValues.groupIds.length) {
-      toast.error('Groupe requis', 'Selectionnez au moins un groupe destinataire.');
+      toast.warning('Group required.', 'Select at least one destination group.');
       return;
     }
 
@@ -181,10 +183,10 @@ const AdminTimetablePage = () => {
     try {
       if (editingTimetable) {
         await adminApi.updateTimetable(editingTimetable.id, payload);
-        toast.success('Emploi du temps remplace', 'Les groupes selectionnes verront la nouvelle version.');
+        toast.success('Timetable updated successfully.', 'Selected groups will see the new version.');
       } else {
         await adminApi.createTimetable(payload);
-        toast.success('Emploi du temps partage', 'Le document est maintenant disponible pour les groupes.');
+        toast.success('Timetable shared successfully.', 'The document is now available to the selected groups.');
       }
       resetForm();
       await reload();
@@ -192,31 +194,48 @@ const AdminTimetablePage = () => {
       const description =
         submitError?.response?.data?.message ||
         Object.values(submitError?.response?.data?.errors || {}).flat().join(' ') ||
-        "L'envoi de l'emploi du temps a echoue.";
+        'Unable to connect to the server.';
 
-      toast.error('Partage impossible', description);
+      toast.error('Failed to share timetable.', description);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (row) => {
-    setDeletingId(row.id);
+  const requestDelete = (row) => {
+    setDeleteTarget(row);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleting) {
+      return;
+    }
+
+    setDeleteTarget(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setDeleting(true);
 
     try {
-      await adminApi.deleteTimetable(row.id);
-      toast.success('Emploi du temps supprime', 'Le document ne sera plus affiche aux groupes associes.');
+      await adminApi.deleteTimetable(deleteTarget.id);
+      toast.success('Timetable deleted successfully.', 'The document is no longer visible to associated groups.');
       await reload();
-      if (editingTimetable?.id === row.id) {
+      if (editingTimetable?.id === deleteTarget.id) {
         resetForm();
       }
     } catch (deleteError) {
       toast.error(
-        'Suppression impossible',
-        deleteError?.response?.data?.message || "Impossible de supprimer l'emploi du temps."
+        'Failed to delete timetable.',
+        deleteError?.response?.data?.message || 'Unable to connect to the server.'
       );
     } finally {
-      setDeletingId(null);
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -359,8 +378,8 @@ const AdminTimetablePage = () => {
           error={error}
           emptyMessage="Aucun emploi du temps partage"
           onEdit={handleEdit}
-          onDelete={handleDelete}
-          actionStates={{ delete: Boolean(deletingId), activeId: deletingId }}
+          onDelete={requestDelete}
+          actionStates={{ delete: deleting, activeId: deleteTarget?.id }}
         />
       </section>
 
@@ -369,6 +388,20 @@ const AdminTimetablePage = () => {
         showAudience
         emptyTitle="Aucun partage recent"
         emptyDescription="Les emplois du temps envoyes apparaitront ici avec un apercu visuel."
+      />
+
+      <DeleteConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title="Delete timetable?"
+        description={
+          deleteTarget
+            ? `This will permanently remove "${deleteTarget.title || 'this timetable'}" from the shared list.`
+            : ''
+        }
+        itemName={deleteTarget?.title || 'this timetable'}
+        loading={deleting}
+        onCancel={closeDeleteModal}
+        onConfirm={handleDelete}
       />
     </div>
   );

@@ -132,10 +132,10 @@ const ResourceCrudPage = ({
     try {
       if (modalMode === 'create') {
         await createItem(buildCreatePayload(values, dependencies));
-        toast.success(`${entityLabel} ajoute`, 'La nouvelle entree a ete enregistree avec succes.');
+        toast.success(`${entityLabel} added successfully.`, 'Your changes were saved successfully.');
       } else if (activeItem?._raw) {
         await updateItem(activeItem._raw.id, buildUpdatePayload(values, activeItem._raw, dependencies));
-        toast.success(`${entityLabel} mis a jour`, 'Les modifications ont ete enregistrees.');
+        toast.success(`${entityLabel} updated successfully.`, 'Your changes were saved successfully.');
       }
 
       setModalMode(null);
@@ -145,9 +145,9 @@ const ResourceCrudPage = ({
       const description =
         submitError?.response?.data?.message ||
         Object.values(submitError?.response?.data?.errors || {}).flat().join(' ') ||
-        "Une erreur s'est produite pendant l'enregistrement.";
+        'Unable to connect to the server.';
 
-      toast.error('Enregistrement impossible', description);
+      toast.error(`Failed to save ${entityLabel.toLowerCase()}.`, description);
     } finally {
       setSaving(false);
       setActiveActionId(null);
@@ -166,12 +166,12 @@ const ResourceCrudPage = ({
       await deleteItem(activeItem._raw.id);
       setIsDeleteOpen(false);
       setActiveItem(null);
-      toast.success(`${entityLabel} supprime`, "L'element a ete retire avec succes.");
+      toast.success(`${entityLabel} deleted successfully.`, 'The record has been removed.');
       await reload?.();
     } catch (deleteError) {
       toast.error(
-        'Suppression impossible',
-        deleteError?.response?.data?.message || "La suppression n'a pas pu etre terminee."
+        `Failed to delete ${entityLabel.toLowerCase()}.`,
+        deleteError?.response?.data?.message || 'Unable to connect to the server.'
       );
     } finally {
       setDeleting(false);
