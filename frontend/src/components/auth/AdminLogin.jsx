@@ -5,6 +5,7 @@ import { Shield } from 'lucide-react';
 import { authApi, setAuthToken } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import BackToHomeButton from '../common/BackToHomeButton';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -62,6 +63,9 @@ const AdminLogin = () => {
         transition={{ duration: 0.6 }}
         className="w-full max-w-md rounded-2xl border border-white/50 bg-white/80 p-8 shadow-xl backdrop-blur-xl dark:border-slate-800/50 dark:bg-slate-900/80 sm:p-10"
       >
+        <div className="mb-6 flex justify-start">
+          <BackToHomeButton />
+        </div>
         <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-secondary-500 shadow-lg">
           <Shield className="h-10 w-10 text-white" />
         </div>

@@ -2,11 +2,13 @@ import React, { useMemo } from 'react';
 import { BookOpenCheck, GraduationCap, UserCog, Users } from 'lucide-react';
 import ActionButton from '../components/admin/ActionButton';
 import ResourceCrudPage from '../components/admin/ResourceCrudPage';
+import SearchableMultiSelect from '../components/common/SearchableMultiSelect';
 import { useAdminResourceList } from '../hooks/useAdminData';
 import { useAdminLookups } from '../hooks/useAdminLookups';
 import { adminApi } from '../services/api';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const getInitials = (value = '') =>
   value
     .split(' ')
@@ -15,8 +17,32 @@ const getInitials = (value = '') =>
     .map((part) => part[0]?.toUpperCase() || '')
     .join('');
 
+const renderGroupBadges = (groups = []) => {
+  if (!Array.isArray(groups) || groups.length === 0) {
+    return (
+      <span className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-500 dark:bg-white/5 dark:text-slate-400">
+        Aucun groupe
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {groups.map((group) => (
+        <span
+          key={group.id}
+          className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-700 ring-1 ring-sky-500/10 dark:bg-sky-500/15 dark:text-sky-200 dark:ring-sky-400/20"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-sky-500 dark:bg-sky-300" />
+          <span className="max-w-[12rem] truncate">{group.nom}</span>
+        </span>
+      ))}
+    </div>
+  );
+};
+
 const AdminProfessorsPage = () => {
-  const lookups = useAdminLookups(['filieres', 'modules']);
+  const lookups = useAdminLookups(['filieres', 'groups']);
   const { items, loading, error, reload } = useAdminResourceList(
     () => adminApi.professors(),
     'Impossible de charger la liste des professeurs.'
@@ -28,9 +54,12 @@ const AdminProfessorsPage = () => {
       label: filiere.nom,
     }));
 
-    const moduleOptions = (lookups.modules || []).map((module) => ({
-      value: module.nom,
-      label: module.code ? `${module.code} - ${module.nom}` : module.nom,
+    const groups = (lookups.groups || []).map((group) => ({
+      ...group,
+      value: String(group.id),
+      label: group.nom,
+      filiereId: String(group.filiere_id),
+      filiereName: group.filiere?.nom || group.filier?.nom || '',
     }));
 
     const specialiteOptions = Array.from(new Set(items.map((professor) => professor.specialite).filter(Boolean)))
@@ -42,10 +71,10 @@ const AdminProfessorsPage = () => {
 
     return {
       filiereOptions,
-      moduleOptions,
+      groups,
       specialiteOptions,
     };
-  }, [items, lookups.filieres, lookups.modules]);
+  }, [items, lookups.filieres, lookups.groups]);
 
   const summaryCards = useMemo(() => {
     const totalTeachers = items.length;
@@ -141,6 +170,11 @@ const AdminProfessorsPage = () => {
           ),
         },
         {
+          key: 'groupes',
+          header: 'Groupes',
+          render: (row) => renderGroupBadges(row.groupes),
+        },
+        {
           key: 'specialite',
           header: 'Specialite',
           render: (row) => (
@@ -187,6 +221,13 @@ const AdminProfessorsPage = () => {
         email: professor.user?.email || '-',
         phone: professor.user?.phone || '-',
         formation: professor.filiere?.nom || professor.filier?.nom || '-',
+        groupes: Array.isArray(professor.groupes)
+          ? professor.groupes.map((group) => ({
+              id: group.id,
+              nom: group.nom,
+              filiere: group.filiere?.nom || group.filier?.nom || '-',
+            }))
+          : [],
         specialite: professor.specialite || '-',
         profileScore: Math.round(
           (
@@ -196,8 +237,7 @@ const AdminProfessorsPage = () => {
               professor.user?.address,
               professor.filiere?.nom || professor.filier?.nom,
               professor.specialite,
-            ].filter(Boolean).length /
-              5
+            ].filter(Boolean).length / 5
           ) * 100
         ),
       })}
@@ -216,6 +256,44 @@ const AdminProfessorsPage = () => {
           placeholder: 'Selectionner une formation',
         },
         { name: 'specialite', label: 'Specialite / Module', required: true, placeholder: 'Developpement Web' },
+        {
+          name: 'group_ids',
+          label: 'Groupes affectes',
+          type: 'custom',
+          fullWidth: true,
+          visible: (values) => Boolean(values.filiere_id && values.specialite),
+          render: ({ values, error, onChange }) => {
+            const availableGroups = deps.groups.filter((group) => String(group.filiereId) === String(values.filiere_id));
+
+            return (
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Groupes affectes
+                </label>
+                <div className="rounded-[22px] border border-white/70 bg-white/85 p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80">
+                  <SearchableMultiSelect
+                    options={availableGroups}
+                    selected={values.group_ids || []}
+                    onChange={onChange}
+                    placeholder="Rechercher un groupe..."
+                    getOptionLabel={(group) => group.nom}
+                    getOptionValue={(group) => group.id}
+                    getOptionSearchText={(group) => `${group.nom} ${group.filiereName || ''}`}
+                    emptyMessage="Aucun groupe disponible pour cette formation."
+                    ariaLabel="Groupes affectes"
+                    selectedLabel="Groupes selectionnes"
+                    availableLabel="Groupes disponibles"
+                    className="border-none bg-transparent p-0 shadow-none"
+                  />
+                  {error ? <p className="mt-3 text-xs font-medium text-rose-600 dark:text-rose-300">{error}</p> : null}
+                  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                    Selectionnez un ou plusieurs groupes lies a la formation choisie.
+                  </p>
+                </div>
+              </div>
+            );
+          },
+        },
         {
           name: 'password',
           label: 'Password',
@@ -237,6 +315,12 @@ const AdminProfessorsPage = () => {
         { name: 'phone', label: 'Telephone' },
         { name: 'address', label: 'Adresse', fullWidth: true },
         { name: 'formation', label: 'Formation' },
+        {
+          name: 'groupes',
+          label: 'Groupes affectes',
+          fullWidth: true,
+          renderValue: (_, item) => renderGroupBadges(item?.groupes || []),
+        },
         { name: 'specialite', label: 'Specialite / Module' },
       ]}
       buildInitialValues={(item) => ({
@@ -252,6 +336,7 @@ const AdminProfessorsPage = () => {
         filiere_id: item?.filiere_id ? String(item.filiere_id) : '',
         formation: item?.filiere?.nom || item?.filier?.nom || '-',
         specialite: item?.specialite || '',
+        group_ids: Array.isArray(item?.groupes) ? item.groupes.map((group) => String(group.id)) : [],
         password: '',
         confirm_password: '',
       })}
@@ -264,6 +349,7 @@ const AdminProfessorsPage = () => {
         filiere_id: Number(values.filiere_id),
         specialite: values.specialite,
         password: values.password,
+        group_ids: (values.group_ids || []).map((groupId) => Number(groupId)),
       })}
       buildUpdatePayload={(values) => {
         const payload = {
@@ -274,6 +360,7 @@ const AdminProfessorsPage = () => {
           address: values.address,
           filiere_id: Number(values.filiere_id),
           specialite: values.specialite,
+          group_ids: (values.group_ids || []).map((groupId) => Number(groupId)),
         };
 
         if (values.password) {
@@ -302,6 +389,10 @@ const AdminProfessorsPage = () => {
 
         if (values.email && !emailPattern.test(values.email)) {
           errors.email = "L'adresse email n'est pas valide.";
+        }
+
+        if (!Array.isArray(values.group_ids) || values.group_ids.length === 0) {
+          errors.group_ids = 'Veuillez sélectionner au moins un groupe.';
         }
 
         if (mode === 'create' || values.password || values.confirm_password) {
@@ -361,7 +452,7 @@ const AdminProfessorsPage = () => {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Module / Specialite</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Specialite / Module</label>
               <select
                 value={draftFilters.specialite}
                 onChange={(event) =>

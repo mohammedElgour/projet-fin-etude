@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Groupe;
 use App\Models\Professeur;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ProfesseurController extends Controller
 {
@@ -24,7 +26,7 @@ class ProfesseurController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = max(1, min($request->integer('per_page', 15), 200));
-        $professeurs = Professeur::with(['user', 'filier'])->paginate($perPage);
+        $professeurs = Professeur::with(['user', 'filier', 'groupes.filiere'])->paginate($perPage);
 
         return response()->json($professeurs);
     }
@@ -39,10 +41,17 @@ class ProfesseurController extends Controller
             'address' => ['required', 'string'],
             'filiere_id' => ['required', 'exists:filiers,id'],
             'specialite' => ['required', 'string', 'max:255'],
+            'group_ids' => ['required', 'array', 'min:1'],
+            'group_ids.*' => ['integer', 'distinct', 'exists:groupes,id'],
             'password' => ['required', 'string', 'min:8'],
+        ], [
+            'group_ids.required' => 'Veuillez sélectionner au moins un groupe.',
+            'group_ids.min' => 'Veuillez sélectionner au moins un groupe.',
         ]);
 
         $result = DB::transaction(function () use ($validated) {
+            $groupIds = $this->validateGroupAssignments((int) $validated['filiere_id'], $validated['group_ids']);
+
             $user = User::create([
                 'name' => $this->buildDisplayName($validated),
                 'first_name' => $validated['first_name'],
@@ -60,7 +69,9 @@ class ProfesseurController extends Controller
                 'filiere_id' => $validated['filiere_id'],
             ]);
 
-            return $professeur->load(['user', 'filier']);
+            $professeur->groupes()->sync($groupIds);
+
+            return $professeur->fresh()->load(['user', 'filier', 'groupes.filiere']);
         });
 
         return response()->json($result, 201);
@@ -68,7 +79,7 @@ class ProfesseurController extends Controller
 
     public function show(Professeur $professeur): JsonResponse
     {
-        $professeur->load(['user', 'filier']);
+        $professeur->load(['user', 'filier', 'groupes.filiere']);
 
         return response()->json($professeur);
     }
@@ -89,7 +100,12 @@ class ProfesseurController extends Controller
             'address' => ['sometimes', 'required', 'string'],
             'filiere_id' => ['sometimes', 'required', 'exists:filiers,id'],
             'specialite' => ['sometimes', 'required', 'string', 'max:255'],
+            'group_ids' => ['required', 'array', 'min:1'],
+            'group_ids.*' => ['integer', 'distinct', 'exists:groupes,id'],
             'password' => ['nullable', 'string', 'min:8'],
+        ], [
+            'group_ids.required' => 'Veuillez sélectionner au moins un groupe.',
+            'group_ids.min' => 'Veuillez sélectionner au moins un groupe.',
         ]);
 
         DB::transaction(function () use ($validated, $professeur) {
@@ -119,9 +135,12 @@ class ProfesseurController extends Controller
                     'filiere_id' => $validated['filiere_id'] ?? $professeur->filiere_id,
                 ]);
             }
+
+            $groupIds = $this->validateGroupAssignments((int) ($validated['filiere_id'] ?? $professeur->filiere_id), $validated['group_ids']);
+            $professeur->groupes()->sync($groupIds);
         });
 
-        return response()->json($professeur->fresh()->load(['user', 'filier']));
+        return response()->json($professeur->fresh()->load(['user', 'filier', 'groupes.filiere']));
     }
 
     public function destroy(Professeur $professeur): JsonResponse
@@ -135,5 +154,32 @@ class ProfesseurController extends Controller
         });
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * @param array<int, int|string> $groupIds
+     * @return array<int, int>
+     */
+    private function validateGroupAssignments(int $filiereId, array $groupIds): array
+    {
+        $normalizedGroupIds = collect($groupIds)
+            ->map(fn ($groupId) => (int) $groupId)
+            ->unique()
+            ->values();
+
+        $allowedGroupIds = Groupe::query()
+            ->where('filiere_id', $filiereId)
+            ->whereIn('id', $normalizedGroupIds->all())
+            ->pluck('id')
+            ->map(fn ($groupId) => (int) $groupId)
+            ->all();
+
+        if (count($allowedGroupIds) !== $normalizedGroupIds->count()) {
+            throw ValidationException::withMessages([
+                'group_ids' => ['Les groupes sélectionnés doivent appartenir à la formation choisie.'],
+            ]);
+        }
+
+        return $allowedGroupIds;
     }
 }
