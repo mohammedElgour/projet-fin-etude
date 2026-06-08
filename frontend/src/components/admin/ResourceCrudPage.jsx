@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Eye, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Eye, Plus, Trash2 } from 'lucide-react';
 import ManagementTable from './ManagementTable';
 import CrudModal from './CrudModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
@@ -18,7 +18,6 @@ const ResourceCrudPage = ({
   emptyMessage,
   addLabel,
   createTitle,
-  editTitle,
   detailTitle,
   deleteTitle,
   deleteDescription,
@@ -26,11 +25,9 @@ const ResourceCrudPage = ({
   formFields = () => [],
   toRow,
   createItem,
-  updateItem,
   deleteItem,
   buildInitialValues,
   buildCreatePayload,
-  buildUpdatePayload,
   getItemName,
   validateForm,
   dependencies = {},
@@ -38,6 +35,7 @@ const ResourceCrudPage = ({
   filterFn,
   renderFilters,
   summaryCards = [],
+  rowActions = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [modalMode, setModalMode] = useState(null);
@@ -64,7 +62,7 @@ const ResourceCrudPage = ({
   );
 
   useEffect(() => {
-    if (modalMode === 'view' || modalMode === 'edit') {
+    if (modalMode === 'view') {
       const latest = rows.find((row) => row.id === activeItem?.id);
       if (latest) {
         setActiveItem(latest);
@@ -75,11 +73,6 @@ const ResourceCrudPage = ({
   const openCreate = () => {
     setActiveItem(null);
     setModalMode('create');
-  };
-
-  const openEdit = (row) => {
-    setActiveItem(row);
-    setModalMode('edit');
   };
 
   const openView = (row) => {
@@ -133,9 +126,6 @@ const ResourceCrudPage = ({
       if (modalMode === 'create') {
         await createItem(buildCreatePayload(values, dependencies));
         toast.success(`${entityLabel} added successfully.`, 'Your changes were saved successfully.');
-      } else if (activeItem?._raw) {
-        await updateItem(activeItem._raw.id, buildUpdatePayload(values, activeItem._raw, dependencies));
-        toast.success(`${entityLabel} updated successfully.`, 'Your changes were saved successfully.');
       }
 
       setModalMode(null);
@@ -220,16 +210,14 @@ const ResourceCrudPage = ({
           onAdd={openCreate}
           addLabel={addLabel}
           onView={openView}
-          onEdit={openEdit}
           onDelete={openDelete}
+          rowActions={rowActions}
           actionStates={{
-            edit: saving && modalMode === 'edit',
             delete: deleting,
             activeId: activeActionId,
           }}
           actionIcons={{
             view: Eye,
-            edit: Pencil,
             delete: Trash2,
             add: Plus,
           }}
@@ -261,9 +249,7 @@ const ResourceCrudPage = ({
         title={
           modalMode === 'create'
             ? createTitle
-            : modalMode === 'edit'
-              ? editTitle
-              : detailTitle
+            : detailTitle
         }
         fields={formFields(dependencies, modalMode, activeItem?._raw || null)}
         detailFields={detailsFields(dependencies, activeItem?._raw || null)}
@@ -271,7 +257,7 @@ const ResourceCrudPage = ({
         onClose={closeModal}
         onSubmit={handleSubmit}
         loading={saving}
-        submitLabel={modalMode === 'edit' ? 'Enregistrer' : addLabel}
+        submitLabel={addLabel}
         validate={(values, mode) => validateForm?.(values, mode, dependencies, activeItem?._raw || null)}
       />
 

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\StagiaireController;
 use App\Http\Controllers\Api\Admin\AdminTimetableController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Common\NotificationController;
+use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\Professeur\NoteController as ProfNoteController;
 use App\Http\Controllers\Api\Professeur\ScheduleController as ProfScheduleController;
 use App\Http\Controllers\Api\Professeur\StudentController as ProfStudentController;
@@ -31,7 +32,7 @@ use App\Http\Controllers\Api\Stagiaire\StudentPortalController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
@@ -79,8 +80,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/notes/{note}', [NoteValidationController::class, 'updateManagedNote']);
     });
 
+    Route::middleware('role:stagiaire')->prefix('stagiaire')->group(function () {
+        Route::get('/profile', [ProfileController::class, 'show']);
+        Route::put('/profile', [ProfileController::class, 'update']);
+        Route::get('/notes', [StudentPortalController::class, 'notes']);
+        Route::get('/emploi-du-temps', [StudentPortalController::class, 'emploiDuTemps']);
+        Route::get('/schedule', [StudentPortalController::class, 'schedule']);
+        Route::get('/timetables', [AdminTimetableController::class, 'index']);
+        Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
+        Route::get('/announcements', [StudentPortalController::class, 'announcements']);
+        Route::get('/ai-recommendation', [StudentPortalController::class, 'aiRecommendation']);
+    });
+
     // Professeur
     Route::middleware('role:professeur')->prefix('professeur')->group(function () {
+        Route::get('/profile', [ProfileController::class, 'show']);
+        Route::put('/profile', [ProfileController::class, 'update']);
         Route::get('/notes', [ProfNoteController::class, 'index']);
         Route::post('/notes/batch', [ProfNoteController::class, 'saveBatch']);
         Route::post('/notes/submit', [ProfNoteController::class, 'submitBatch']);
@@ -96,16 +111,5 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/schedule', [ProfScheduleController::class, 'index']);
         Route::get('/timetables', [AdminTimetableController::class, 'index']);
         Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
-    });
-
-    // Stagiaire
-    Route::middleware('role:stagiaire')->prefix('stagiaire')->group(function () {
-        Route::get('/notes', [StudentPortalController::class, 'notes']);
-        Route::get('/emploi-du-temps', [StudentPortalController::class, 'emploiDuTemps']);
-        Route::get('/schedule', [StudentPortalController::class, 'schedule']);
-        Route::get('/timetables', [AdminTimetableController::class, 'index']);
-        Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
-        Route::get('/announcements', [StudentPortalController::class, 'announcements']);
-        Route::get('/ai-recommendation', [StudentPortalController::class, 'aiRecommendation']);
     });
 });

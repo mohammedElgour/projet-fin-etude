@@ -45,8 +45,8 @@ class ProfesseurController extends Controller
             'group_ids.*' => ['integer', 'distinct', 'exists:groupes,id'],
             'password' => ['required', 'string', 'min:8'],
         ], [
-            'group_ids.required' => 'Veuillez sélectionner au moins un groupe.',
-            'group_ids.min' => 'Veuillez sélectionner au moins un groupe.',
+            'group_ids.required' => 'Veuillez sÃ©lectionner au moins un groupe.',
+            'group_ids.min' => 'Veuillez sÃ©lectionner au moins un groupe.',
         ]);
 
         $result = DB::transaction(function () use ($validated) {
@@ -61,6 +61,7 @@ class ProfesseurController extends Controller
                 'address' => $validated['address'],
                 'password' => Hash::make($validated['password']),
                 'role' => 'professeur',
+                'is_active' => true,
             ]);
 
             $professeur = Professeur::create([
@@ -87,58 +88,23 @@ class ProfesseurController extends Controller
     public function update(Request $request, Professeur $professeur): JsonResponse
     {
         $validated = $request->validate([
-            'first_name' => ['sometimes', 'required', 'string', 'max:255'],
-            'last_name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => [
-                'sometimes',
-                'required',
-                'email',
-                'max:255',
-                Rule::unique('users', 'email')->ignore($professeur->user_id),
-            ],
-            'phone' => ['sometimes', 'required', 'string', 'max:30'],
-            'address' => ['sometimes', 'required', 'string'],
-            'filiere_id' => ['sometimes', 'required', 'exists:filiers,id'],
-            'specialite' => ['sometimes', 'required', 'string', 'max:255'],
-            'group_ids' => ['required', 'array', 'min:1'],
-            'group_ids.*' => ['integer', 'distinct', 'exists:groupes,id'],
-            'password' => ['nullable', 'string', 'min:8'],
-        ], [
-            'group_ids.required' => 'Veuillez sélectionner au moins un groupe.',
-            'group_ids.min' => 'Veuillez sélectionner au moins un groupe.',
+            'is_active' => ['sometimes', 'boolean'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        DB::transaction(function () use ($validated, $professeur) {
-            $userData = [];
+        $userData = [];
 
-            foreach (['first_name', 'last_name', 'email', 'phone', 'address'] as $field) {
-                if (array_key_exists($field, $validated)) {
-                    $userData[$field] = $validated[$field];
-                }
-            }
+        if (array_key_exists('is_active', $validated)) {
+            $userData['is_active'] = $validated['is_active'];
+        }
 
-            if (!empty($validated['password'])) {
-                $userData['password'] = Hash::make($validated['password']);
-            }
+        if (! empty($validated['password'])) {
+            $userData['password'] = Hash::make($validated['password']);
+        }
 
-            if (array_key_exists('first_name', $userData) || array_key_exists('last_name', $userData)) {
-                $userData['name'] = $this->buildDisplayName($validated, $professeur->user);
-            }
-
-            if (!empty($userData)) {
-                $professeur->user()->update($userData);
-            }
-
-            if (array_key_exists('specialite', $validated) || array_key_exists('filiere_id', $validated)) {
-                $professeur->update([
-                    'specialite' => $validated['specialite'] ?? $professeur->specialite,
-                    'filiere_id' => $validated['filiere_id'] ?? $professeur->filiere_id,
-                ]);
-            }
-
-            $groupIds = $this->validateGroupAssignments((int) ($validated['filiere_id'] ?? $professeur->filiere_id), $validated['group_ids']);
-            $professeur->groupes()->sync($groupIds);
-        });
+        if (! empty($userData)) {
+            $professeur->user()->update($userData);
+        }
 
         return response()->json($professeur->fresh()->load(['user', 'filier', 'groupes.filiere']));
     }

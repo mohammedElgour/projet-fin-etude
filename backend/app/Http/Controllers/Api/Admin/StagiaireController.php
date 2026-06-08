@@ -53,6 +53,7 @@ class StagiaireController extends Controller
                 'date_of_birth' => $validated['date_of_birth'],
                 'password' => Hash::make($validated['password']),
                 'role' => 'stagiaire',
+                'is_active' => true,
             ]);
 
             $stagiaire = Stagiaire::create([
@@ -76,47 +77,23 @@ class StagiaireController extends Controller
     public function update(Request $request, Stagiaire $stagiaire): JsonResponse
     {
         $validated = $request->validate([
-            'first_name' => ['sometimes', 'required', 'string', 'max:255'],
-            'last_name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => [
-                'sometimes',
-                'required',
-                'email',
-                'max:255',
-                Rule::unique('users', 'email')->ignore($stagiaire->user_id),
-            ],
-            'phone' => ['sometimes', 'required', 'string', 'max:30'],
-            'address' => ['sometimes', 'required', 'string'],
-            'date_of_birth' => ['sometimes', 'required', 'date'],
-            'password' => ['nullable', 'string', 'min:8'],
-            'groupe_id' => ['sometimes', 'required', 'exists:groupes,id'],
+            'is_active' => ['sometimes', 'boolean'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        DB::transaction(function () use ($validated, $stagiaire) {
-            $userData = [];
+        $userData = [];
 
-            foreach (['first_name', 'last_name', 'email', 'phone', 'address', 'date_of_birth'] as $field) {
-                if (array_key_exists($field, $validated)) {
-                    $userData[$field] = $validated[$field];
-                }
-            }
+        if (array_key_exists('is_active', $validated)) {
+            $userData['is_active'] = $validated['is_active'];
+        }
 
-            if (!empty($validated['password'])) {
-                $userData['password'] = Hash::make($validated['password']);
-            }
+        if (! empty($validated['password'])) {
+            $userData['password'] = Hash::make($validated['password']);
+        }
 
-            if (array_key_exists('first_name', $userData) || array_key_exists('last_name', $userData)) {
-                $userData['name'] = $this->buildDisplayName($validated, $stagiaire->user);
-            }
-
-            if (!empty($userData)) {
-                $stagiaire->user()->update($userData);
-            }
-
-            if (array_key_exists('groupe_id', $validated)) {
-                $stagiaire->update(['groupe_id' => $validated['groupe_id']]);
-            }
-        });
+        if (! empty($userData)) {
+            $stagiaire->user()->update($userData);
+        }
 
         return response()->json($stagiaire->fresh()->load(['user', 'groupe.filier']));
     }

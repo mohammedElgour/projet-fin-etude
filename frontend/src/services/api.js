@@ -75,7 +75,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401 && typeof window !== 'undefined') {
+    const isInactiveAccount = error?.response?.status === 403 && error?.response?.data?.code === 'account_inactive';
+
+    if ((error?.response?.status === 401 || isInactiveAccount) && typeof window !== 'undefined') {
       setAuthToken('');
       window.dispatchEvent(new Event('auth:unauthorized'));
     }
@@ -430,6 +432,34 @@ export const stagiaireApi = {
   },
   recommendation: async () => {
     const response = await api.get('/stagiaire/ai-recommendation');
+    return response.data;
+  },
+};
+
+export const profileApi = {
+  get: async (role) => {
+    const response = await api.get(`/${role}/profile`);
+    return response.data;
+  },
+  update: async (role, payload) => {
+    const formData = payload instanceof FormData ? payload : new FormData();
+
+    if (!(payload instanceof FormData)) {
+      Object.entries(payload || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, value);
+        }
+      });
+    }
+
+    formData.set('_method', 'PUT');
+
+    const response = await api.post(`/${role}/profile`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
     return response.data;
   },
 };
