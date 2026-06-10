@@ -35,10 +35,10 @@ const emptyForm = {
 };
 
 const inputClass =
-  'w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-slate-900 outline-none transition-all focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-950/70 dark:text-white dark:focus:bg-slate-900';
+  'w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-slate-900 outline-none transition-all duration-200 focus:bg-blue-50/30 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 dark:border-white/10 dark:bg-slate-950/70 dark:text-white dark:focus:bg-slate-900';
 
 const cardClass =
-  'rounded-2xl border border-gray-200 bg-white shadow-[0_16px_50px_-32px_rgba(15,23,42,0.22)]';
+  'rounded-2xl overflow-hidden border border-gray-100 bg-white shadow-sm transition-shadow duration-300 hover:shadow-md dark:border-white/10 dark:bg-slate-950/70';
 
 const formatRole = (role = '') => {
   if (role === 'stagiaire') return 'Stagiaire';
@@ -107,23 +107,50 @@ const LoadingSkeleton = () => (
 
 const Field = ({ label, error, children, fullWidth = false }) => (
   <div className={fullWidth ? 'sm:col-span-2' : ''}>
-    <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</label>
+    <label className="mb-2 block text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-200">{label}</label>
     {children}
     {error ? <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-300">{error}</p> : null}
   </div>
 );
 
-const SectionHeader = ({ icon: Icon, title, subtitle }) => (
-  <div className="flex items-center gap-3">
-    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+const SECTION_TONES = {
+  personal: {
+    strip: 'bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100',
+    iconWrap: 'bg-blue-100',
+    iconText: 'text-blue-600',
+  },
+  security: {
+    strip: 'bg-gradient-to-r from-violet-50 to-purple-50 border-b border-violet-100',
+    iconWrap: 'bg-violet-100',
+    iconText: 'text-violet-600',
+  },
+  photo: {
+    strip: 'bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-teal-100',
+    iconWrap: 'bg-teal-100',
+    iconText: 'text-teal-600',
+  },
+  status: {
+    strip: 'bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-100',
+    iconWrap: 'bg-emerald-100',
+    iconText: 'text-emerald-600',
+  },
+};
+
+const SectionHeader = ({ icon: Icon, title, subtitle, tone = 'personal' }) => {
+  const theme = SECTION_TONES[tone] || SECTION_TONES.personal;
+
+  return (
+    <div className={`-mx-5 -mt-5 mb-4 flex items-center gap-3 px-5 py-4 ${theme.strip}`}>
+      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${theme.iconWrap} ${theme.iconText}`}>
       <Icon className="h-5 w-5" />
     </div>
     <div>
       <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h2>
       <p className="text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
     </div>
-  </div>
-);
+    </div>
+  );
+};
 
 const SettingsPage = () => {
   const { user, token, login } = useAuth();
@@ -131,6 +158,47 @@ const SettingsPage = () => {
   const fileInputRef = useRef(null);
   const resetTimerRef = useRef(null);
   const isEditable = editableRoles.has(user?.role);
+  const isStagiaire = user?.role === 'stagiaire';
+
+  const palette = useMemo(
+    () =>
+      isStagiaire
+        ? {
+            pageBg: 'bg-gradient-to-br from-slate-50 via-indigo-50/20 to-purple-50/20',
+            hero: 'from-indigo-600 via-violet-500 to-purple-500',
+            heroAvatar: 'from-indigo-500 to-purple-400',
+            heroIcon: 'text-indigo-600',
+            heroBadge: 'bg-indigo-500/10 text-indigo-700',
+            heroStatusActive: 'bg-emerald-400/15 text-emerald-50',
+            heroStatusInactive: 'bg-rose-400/15 text-rose-50',
+            surfaceIcon: 'text-indigo-500',
+            roleValue: 'text-indigo-600',
+            currentPwdWrap: 'border-l-4 border-l-purple-400 bg-purple-50/30',
+            currentPwdIcon: 'text-violet-400',
+            emailIcon: 'text-purple-400',
+            passwordIcon: 'text-purple-400',
+            pageButton: 'bg-gradient-to-r from-indigo-500 to-purple-400 hover:from-indigo-600 hover:to-purple-500',
+            successButton: 'bg-gradient-to-r from-emerald-500 to-green-400',
+          }
+        : {
+            pageBg: 'bg-gradient-to-br from-slate-50 via-blue-50/20 to-teal-50/20',
+            hero: 'from-blue-600 via-cyan-500 to-teal-500',
+            heroAvatar: 'from-blue-500 to-teal-400',
+            heroIcon: 'text-blue-600',
+            heroBadge: 'bg-blue-500/10 text-blue-700',
+            heroStatusActive: 'bg-emerald-400/15 text-emerald-50',
+            heroStatusInactive: 'bg-rose-400/15 text-rose-50',
+            surfaceIcon: 'text-blue-500',
+            roleValue: 'text-blue-600',
+            currentPwdWrap: 'border-l-4 border-l-violet-400 bg-violet-50/30',
+            currentPwdIcon: 'text-violet-400',
+            emailIcon: 'text-violet-400',
+            passwordIcon: 'text-violet-400',
+            pageButton: 'bg-gradient-to-r from-blue-500 to-teal-400 hover:from-blue-600 hover:to-teal-500',
+            successButton: 'bg-gradient-to-r from-emerald-500 to-green-400',
+          },
+    [isStagiaire]
+  );
 
   const [profile, setProfile] = useState(user || null);
   const [form, setForm] = useState(emptyForm);
@@ -444,26 +512,26 @@ const SettingsPage = () => {
 
   if (!isEditable) {
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6 ${palette.pageBg}`}>
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
           className="overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_24px_80px_-42px_rgba(15,23,42,0.24)]"
         >
-          <div className="bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-500 px-6 py-8 text-white sm:px-8">
+          <div className={`bg-gradient-to-r ${palette.hero} px-6 py-8 text-white sm:px-8`}>
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] border border-white/25 bg-white/15 text-3xl font-semibold shadow-lg shadow-black/10">
+              <div className={`flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] border border-white/25 bg-gradient-to-br ${palette.heroAvatar} text-3xl font-bold text-white ring-4 ring-white shadow-lg shadow-black/10`}>
                 {displayPhoto ? <img src={displayPhoto} alt="Profile" className="h-full w-full object-cover" /> : initials}
               </div>
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]">
+                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${palette.heroBadge}`}>
                     {accountMeta.role}
                   </span>
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                      active ? 'bg-emerald-400/15 text-emerald-50' : 'bg-rose-400/15 text-rose-50'
+                      active ? palette.heroStatusActive : palette.heroStatusInactive
                     }`}
                   >
                     <ShieldCheck className="h-3.5 w-3.5" />
@@ -481,7 +549,7 @@ const SettingsPage = () => {
 
         <div className={`${cardClass} p-5`}>
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 ${palette.surfaceIcon} dark:bg-slate-900 dark:text-slate-200`}>
               <Shield className="h-5 w-5" />
             </div>
             <div>
@@ -500,20 +568,20 @@ const SettingsPage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${palette.pageBg}`}>
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
         className="overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_24px_80px_-42px_rgba(15,23,42,0.24)]"
       >
-        <div className="bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-500 px-6 py-8 text-white sm:px-8">
+        <div className={`bg-gradient-to-r ${palette.hero} px-6 py-8 text-white sm:px-8`}>
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-            <div className="relative group flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] border border-white/25 bg-white/15 text-3xl font-semibold shadow-lg shadow-black/10">
+            <div className={`group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] border border-white/25 bg-gradient-to-br ${palette.heroAvatar} text-3xl font-bold text-white ring-4 ring-white shadow-lg shadow-black/10`}>
               {displayPhoto ? <img src={displayPhoto} alt="Profile" className="h-full w-full object-cover" /> : <span>{initials}</span>}
 
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/0 opacity-0 transition-opacity duration-200 group-hover:bg-slate-950/35 group-hover:opacity-100">
-                <div className="rounded-full bg-white/95 p-2 text-blue-600 shadow-lg">
+                <div className={`rounded-full bg-white/95 p-2 shadow-lg ${palette.heroIcon}`}>
                   <Camera className="h-4 w-4" />
                 </div>
               </div>
@@ -521,12 +589,12 @@ const SettingsPage = () => {
 
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]">
+                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${palette.heroBadge}`}>
                   {accountMeta.role}
                 </span>
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                    active ? 'bg-emerald-400/15 text-emerald-50' : 'bg-rose-400/15 text-rose-50'
+                    active ? palette.heroStatusActive : palette.heroStatusInactive
                   }`}
                 >
                   <ShieldCheck className="h-3.5 w-3.5" />
@@ -551,8 +619,8 @@ const SettingsPage = () => {
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <div className="space-y-6">
             <section className={`${cardClass} p-5`}>
-              <SectionHeader icon={UserRound} title="Informations personnelles" subtitle="Prenom, nom, telephone et adresse." />
-              <div className="mt-4 border-t border-gray-200 pt-4">
+              <SectionHeader icon={UserRound} title="Informations personnelles" subtitle="Prenom, nom, telephone et adresse." tone="personal" />
+              <div className="mt-4 border-t border-dashed border-gray-200 pt-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Prenom" error={errors.prenom}>
                     <input
@@ -596,10 +664,10 @@ const SettingsPage = () => {
             </section>
 
             <section className={`${cardClass} p-5`}>
-              <SectionHeader icon={Camera} title="Photo de profil" subtitle="Importez une image JPG, PNG ou WEBP." />
-              <div className="mt-4 border-t border-gray-200 pt-4">
+              <SectionHeader icon={Camera} title="Photo de profil" subtitle="Importez une image JPG, PNG ou WEBP." tone="photo" />
+              <div className="mt-4 border-t border-dashed border-gray-200 pt-4">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-                  <div className="group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-slate-50 text-2xl font-semibold text-slate-700 shadow-inner">
+                  <div className={`group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br ${palette.heroAvatar} text-2xl font-bold text-white ring-4 ring-white shadow-lg`}>
                     {displayPhoto ? (
                       <img src={displayPhoto} alt="Photo de profil" className="h-full w-full object-cover" />
                     ) : (
@@ -613,7 +681,7 @@ const SettingsPage = () => {
                   </div>
 
                   <div className="flex-1">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition-all hover:border-blue-200 hover:bg-white hover:text-blue-700">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-teal-300 px-4 py-2 text-sm font-medium text-teal-600 transition-all duration-200 hover:border-teal-400 hover:bg-teal-50">
                       <Upload className="h-4 w-4" />
                       Choisir une image
                       <input
@@ -629,11 +697,11 @@ const SettingsPage = () => {
                       <p>La photo est associee uniquement a votre compte.</p>
                       {photoFile ? (
                         <div className="mt-3 flex flex-wrap items-center gap-3">
-                          <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                          <span className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700">
                             <FileUp className="h-3.5 w-3.5" />
                             {photoFile.name}
                           </span>
-                          <span className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                          <span className="inline-flex rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700">
                             {formatBytes(photoFile.size)}
                           </span>
                           <button
@@ -658,18 +726,18 @@ const SettingsPage = () => {
 
           <div className="space-y-6">
             <section className={`${cardClass} p-5`}>
-              <SectionHeader icon={KeyRound} title="Compte et securite" subtitle="Email et mot de passe." />
-              <div className="mt-4 border-t border-gray-200 pt-4">
+              <SectionHeader icon={KeyRound} title="Compte et securite" subtitle="Email et mot de passe." tone="security" />
+              <div className="mt-4 border-t border-dashed border-gray-200 pt-4">
                 <div className="space-y-4">
                   <Field label="Email" error={errors.email} fullWidth>
                     <div className="relative">
-                      <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Mail className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${palette.emailIcon}`} />
                       <input
                         name="email"
                         type="email"
                         value={form.email}
                         onChange={handleChange}
-                        className={`${inputClass} pl-11`}
+                        className={`${inputClass} pl-11 focus:ring-violet-400 focus:border-violet-400`}
                         placeholder="vous@ista.ma"
                       />
                     </div>
@@ -677,14 +745,14 @@ const SettingsPage = () => {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Mot de passe actuel" error={errors.current_password}>
-                      <div className="relative">
-                        <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <div className={`relative ${palette.currentPwdWrap} rounded-xl`}>
+                        <Lock className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${palette.currentPwdIcon}`} />
                         <input
                           name="current_password"
                           type="password"
                           value={form.current_password}
                           onChange={handleChange}
-                          className={`${inputClass} pl-11`}
+                          className={`${inputClass} pl-11 bg-transparent border-transparent focus:bg-violet-50/30 focus:ring-violet-400 focus:border-violet-400`}
                           placeholder="********"
                         />
                       </div>
@@ -692,13 +760,13 @@ const SettingsPage = () => {
 
                     <Field label="Nouveau mot de passe" error={errors.new_password}>
                       <div className="relative">
-                        <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Lock className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${palette.passwordIcon}`} />
                         <input
                           name="new_password"
                           type="password"
                           value={form.new_password}
                           onChange={handleChange}
-                          className={`${inputClass} pl-11`}
+                          className={`${inputClass} pl-11 focus:ring-violet-400 focus:border-violet-400`}
                           placeholder="Laisser vide pour conserver"
                         />
                       </div>
@@ -707,13 +775,13 @@ const SettingsPage = () => {
 
                   <Field label="Confirmer le mot de passe" error={errors.confirm_password} fullWidth>
                     <div className="relative">
-                      <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Lock className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${palette.passwordIcon}`} />
                       <input
                         name="confirm_password"
                         type="password"
                         value={form.confirm_password}
                         onChange={handleChange}
-                        className={`${inputClass} pl-11`}
+                        className={`${inputClass} pl-11 focus:ring-violet-400 focus:border-violet-400`}
                         placeholder="Confirmer le nouveau mot de passe"
                       />
                     </div>
@@ -723,39 +791,39 @@ const SettingsPage = () => {
             </section>
 
             <section className={`${cardClass} p-5`}>
-              <SectionHeader icon={ShieldCheck} title="Etat du compte" subtitle="Informations visibles pour votre profil." />
-              <div className="mt-4 border-t border-gray-200 pt-4">
+              <SectionHeader icon={ShieldCheck} title="Etat du compte" subtitle="Informations visibles pour votre profil." tone="status" />
+              <div className="mt-4 border-t border-dashed border-gray-200 pt-4">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <div className="flex items-center justify-between rounded-xl bg-emerald-50/50 px-3 py-2">
                     <span className="text-sm font-medium text-slate-600">Statut</span>
                     <span
-                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                        active ? 'bg-emerald-500/10 text-emerald-700' : 'bg-rose-500/10 text-rose-700'
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
+                        active ? 'bg-emerald-100 text-emerald-700 ring-emerald-200' : 'bg-rose-100 text-rose-700 ring-rose-200'
                       }`}
                     >
                       {active ? 'Actif' : 'Inactif'}
                     </span>
                   </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <Shield className="h-4 w-4 text-blue-600" />
+                  <div className="rounded-2xl bg-slate-50 p-4 transition-colors hover:bg-gray-50">
+                    <div className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-gray-50">
+                      <Shield className="h-4 w-4 text-blue-500" />
                       Role
                     </div>
-                    <p className="text-sm text-slate-600">{accountMeta.role}</p>
+                    <p className={`text-sm font-semibold ${isStagiaire ? 'text-indigo-600' : 'text-blue-600'}`}>{accountMeta.role}</p>
                   </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <Users className="h-4 w-4 text-blue-600" />
+                  <div className="rounded-2xl bg-slate-50 p-4 transition-colors hover:bg-gray-50">
+                    <div className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-gray-50">
+                      <Users className="h-4 w-4 text-indigo-500" />
                       Groupe
                     </div>
                     <p className="text-sm text-slate-600">{accountMeta.group}</p>
                   </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <Building2 className="h-4 w-4 text-blue-600" />
+                  <div className="rounded-2xl bg-slate-50 p-4 transition-colors hover:bg-gray-50">
+                    <div className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-gray-50">
+                      <Building2 className="h-4 w-4 text-teal-500" />
                       Filiere
                     </div>
                     <p className="text-sm text-slate-600">{accountMeta.filiere}</p>
@@ -784,11 +852,13 @@ const SettingsPage = () => {
               type="submit"
               disabled={saving || !hasChanges}
               className={[
-                'inline-flex items-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300',
+                'inline-flex items-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg',
                 saveState === 'success'
-                  ? 'bg-emerald-500 shadow-emerald-500/30'
-                  : 'bg-gradient-to-r from-blue-600 to-teal-500 hover:opacity-90',
-                saving ? 'cursor-not-allowed opacity-80' : '',
+                  ? 'bg-gradient-to-r from-emerald-500 to-green-400'
+                  : isStagiaire
+                    ? 'bg-gradient-to-r from-indigo-500 to-purple-400 hover:from-indigo-600 hover:to-purple-500'
+                    : 'bg-gradient-to-r from-blue-500 to-teal-400 hover:from-blue-600 hover:to-teal-500',
+                saving ? 'cursor-not-allowed opacity-50' : '',
                 !hasChanges && !saving ? 'cursor-not-allowed opacity-50' : '',
               ].join(' ')}
             >
