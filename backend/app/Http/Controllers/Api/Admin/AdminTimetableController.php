@@ -76,36 +76,29 @@ class AdminTimetableController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $validated = validator($this->normalizeTimetablePayload($request), [
             'title' => ['nullable', 'string', 'max:255'],
             'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'groupe_ids' => ['nullable', 'array'],
             'groupe_ids.*' => ['integer', 'exists:groupes,id'],
             'groupe_id' => ['nullable', 'exists:groupes,id'],
             'professeur_id' => ['nullable', 'integer', 'exists:professeurs,id'],
-        ]);
+        ])->validate();
 
-        $groupeIds = collect($validated['groupe_ids'] ?? [])
-            ->push($validated['groupe_id'] ?? null)
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
+        $groupeIds = $this->extractGroupIds($validated);
+        $professeurId = $validated['professeur_id'] ?? null;
 
-        $hasGroupe = $groupeIds->isNotEmpty();
-        $hasProfesseur = !empty($validated['professeur_id']);
-
-        if ($hasGroupe === $hasProfesseur) {
+        if ($groupeIds->isEmpty() && blank($professeurId)) {
             return response()->json([
-                'message' => 'Choisissez soit un groupe, soit un professeur.',
+                'message' => 'Veuillez sélectionner au moins un groupe ou un professeur.',
                 'errors' => [
-                    'groupe_id' => ['Choisissez soit un groupe, soit un professeur.'],
+                    'groupe_ids' => ['Veuillez sélectionner au moins un groupe ou un professeur.'],
                 ],
             ], 422);
         }
 
         try {
-            $timetable = DB::transaction(function () use ($request, $validated, $groupeIds) {
+            $timetable = DB::transaction(function () use ($request, $validated, $groupeIds, $professeurId) {
                 $path = $request->file('image')->store('timetables', 'public');
 
                 $timetable = Timetable::create([
@@ -116,11 +109,8 @@ class AdminTimetableController extends Controller
                     'uploaded_by' => $request->user()->id,
                 ]);
 
-                if ($groupeIds->isNotEmpty()) {
-                    $timetable->groupes()->sync($groupeIds->all());
-                } elseif (!empty($validated['professeur_id'])) {
-                    $timetable->professeurs()->sync([$validated['professeur_id']]);
-                }
+                $timetable->groupes()->sync($groupeIds->all());
+                $timetable->professeurs()->sync(blank($professeurId) ? [] : [(int) $professeurId]);
 
                 return $timetable->load(['groupe.filier', 'groupes.filier', 'professeurs.user', 'creator', 'uploader']);
             });
@@ -163,36 +153,29 @@ class AdminTimetableController extends Controller
 
     public function update(Request $request, Timetable $timetable): JsonResponse
     {
-        $validated = $request->validate([
+        $validated = validator($this->normalizeTimetablePayload($request), [
             'title' => ['nullable', 'string', 'max:255'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'groupe_ids' => ['nullable', 'array'],
             'groupe_ids.*' => ['integer', 'exists:groupes,id'],
             'groupe_id' => ['nullable', 'exists:groupes,id'],
             'professeur_id' => ['nullable', 'integer', 'exists:professeurs,id'],
-        ]);
+        ])->validate();
 
-        $groupeIds = collect($validated['groupe_ids'] ?? [])
-            ->push($validated['groupe_id'] ?? null)
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
+        $groupeIds = $this->extractGroupIds($validated);
+        $professeurId = $validated['professeur_id'] ?? null;
 
-        $hasGroupe = $groupeIds->isNotEmpty();
-        $hasProfesseur = !empty($validated['professeur_id']);
-
-        if ($hasGroupe === $hasProfesseur) {
+        if ($groupeIds->isEmpty() && blank($professeurId)) {
             return response()->json([
-                'message' => 'Choisissez soit un ou plusieurs groupes, soit un professeur.',
+                'message' => 'Veuillez sélectionner au moins un groupe ou un professeur.',
                 'errors' => [
-                    'groupe_ids' => ['Choisissez soit un ou plusieurs groupes, soit un professeur.'],
+                    'groupe_ids' => ['Veuillez sélectionner au moins un groupe ou un professeur.'],
                 ],
             ], 422);
         }
 
         try {
-            $updated = DB::transaction(function () use ($request, $validated, $timetable, $groupeIds) {
+            $updated = DB::transaction(function () use ($request, $validated, $timetable, $groupeIds, $professeurId) {
                 $oldPath = null;
 
                 if ($request->hasFile('image')) {
@@ -205,13 +188,8 @@ class AdminTimetableController extends Controller
                 $timetable->uploaded_by = $request->user()->id;
                 $timetable->save();
 
-                if ($groupeIds->isNotEmpty()) {
-                    $timetable->groupes()->sync($groupeIds->all());
-                    $timetable->professeurs()->sync([]);
-                } else {
-                    $timetable->groupes()->sync([]);
-                    $timetable->professeurs()->sync([$validated['professeur_id']]);
-                }
+                $timetable->groupes()->sync($groupeIds->all());
+                $timetable->professeurs()->sync(blank($professeurId) ? [] : [(int) $professeurId]);
 
                 if ($oldPath) {
                     Storage::disk('public')->delete($oldPath);
@@ -341,6 +319,34 @@ class AdminTimetableController extends Controller
         return 'Votre emploi du temps a été mis à jour';
     }
 
+    private function normalizeTimetablePayload(Request $request): array
+    {
+        $payload = $request->all();
+
+        if ($request->has('group_ids') && ! $request->has('groupe_ids')) {
+            $payload['groupe_ids'] = $request->input('group_ids', []);
+        }
+
+        if ($request->has('teacher_id') && ! $request->has('professeur_id')) {
+            $payload['professeur_id'] = $request->input('teacher_id');
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $validated
+     */
+    private function extractGroupIds(array $validated)
+    {
+        return collect($validated['groupe_ids'] ?? [])
+            ->push($validated['groupe_id'] ?? null)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+    }
+
     private function transformTimetable(Timetable $timetable): array
     {
         return [
@@ -386,7 +392,9 @@ class AdminTimetableController extends Controller
                 'id' => $timetable->uploader->id,
                 'name' => $timetable->uploader->name,
             ] : null,
-            'audience_type' => $timetable->groupes->isNotEmpty() || $timetable->groupe_id ? 'groupe' : 'professeurs',
+            'audience_type' => $timetable->groupes->isNotEmpty() && $timetable->professeurs->isNotEmpty()
+                ? 'mixte'
+                : ($timetable->professeurs->isNotEmpty() ? 'professeurs' : 'groupe'),
             'created_at' => optional($timetable->created_at)?->toISOString(),
             'updated_at' => optional($timetable->updated_at)?->toISOString(),
         ];

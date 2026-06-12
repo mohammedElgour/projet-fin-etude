@@ -414,6 +414,10 @@ export const stagiaireApi = {
     const response = await api.get('/stagiaire/notes');
     return response.data;
   },
+  transcript: async () => {
+    const response = await api.get('/stagiaire/releve-de-notes');
+    return response.data;
+  },
   schedule: async () => {
     const response = await api.get('/stagiaire/schedule');
     return response.data;

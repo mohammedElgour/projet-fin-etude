@@ -43,8 +43,32 @@ const renderGroupBadges = (groups = []) => {
   );
 };
 
+const renderModuleBadges = (modules = []) => {
+  if (!Array.isArray(modules) || modules.length === 0) {
+    return (
+      <span className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-500 dark:bg-white/5 dark:text-slate-400">
+        Aucun module
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {modules.map((module) => (
+        <span
+          key={module.id}
+          className="inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-700 ring-1 ring-violet-500/10 dark:bg-violet-500/15 dark:text-violet-200 dark:ring-violet-400/20"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-violet-500 dark:bg-violet-300" />
+          <span className="max-w-[12rem] truncate">{module.code ? `${module.code} - ${module.nom}` : module.nom}</span>
+        </span>
+      ))}
+    </div>
+  );
+};
+
 const AdminProfessorsPage = () => {
-  const lookups = useAdminLookups(['filieres', 'groups']);
+  const lookups = useAdminLookups(['filieres', 'groups', 'modules']);
   const { items, loading, error, reload } = useAdminResourceList(
     () => adminApi.professors(),
     'Impossible de charger la liste des professeurs.'
@@ -67,6 +91,14 @@ const AdminProfessorsPage = () => {
       filiereName: group.filiere?.nom || group.filier?.nom || '',
     }));
 
+    const modules = (lookups.modules || []).map((module) => ({
+      ...module,
+      value: String(module.id),
+      label: module.code ? `${module.code} - ${module.nom}` : module.nom,
+      filiereId: String(module.filiere_id),
+      filiereName: module.filiere?.nom || module.filier?.nom || '',
+    }));
+
     const specialiteOptions = Array.from(new Set(items.map((professor) => professor.specialite).filter(Boolean)))
       .sort((a, b) => a.localeCompare(b))
       .map((value) => ({
@@ -77,9 +109,10 @@ const AdminProfessorsPage = () => {
     return {
       filiereOptions,
       groups,
+      modules,
       specialiteOptions,
     };
-  }, [items, lookups.filieres, lookups.groups]);
+  }, [items, lookups.filieres, lookups.groups, lookups.modules]);
 
   const summaryCards = useMemo(() => {
     const totalTeachers = items.length;
@@ -321,6 +354,14 @@ const AdminProfessorsPage = () => {
                 filiere: group.filiere?.nom || group.filier?.nom || '-',
               }))
             : [],
+          modules: Array.isArray(professor.modules)
+            ? professor.modules.map((module) => ({
+                id: module.id,
+                code: module.code,
+                nom: module.nom,
+                filiere: module.filiere?.nom || module.filier?.nom || '-',
+              }))
+            : [],
           specialite: professor.specialite || '-',
           isActive: Boolean(professor.user?.is_active ?? true),
           profileScore: Math.round(
@@ -349,25 +390,22 @@ const AdminProfessorsPage = () => {
             options: deps.filiereOptions,
             placeholder: 'Selectionner une formation',
           },
-          { name: 'specialite', label: 'Specialite / Module', required: true, placeholder: 'Developpement Web' },
           {
-            name: 'group_ids',
-            label: 'Groupes affectes',
+            name: 'groups',
+            label: 'Groupes',
             type: 'custom',
             fullWidth: true,
-            visible: (values) => Boolean(values.filiere_id && values.specialite),
+            visible: (values) => Boolean(values.filiere_id),
             render: ({ values, error, onChange }) => {
               const availableGroups = deps.groups.filter((group) => String(group.filiereId) === String(values.filiere_id));
 
               return (
                 <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Groupes affectes
-                  </label>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Groupes *</label>
                   <div className="rounded-[22px] border border-white/70 bg-white/85 p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80">
                     <SearchableMultiSelect
                       options={availableGroups}
-                      selected={values.group_ids || []}
+                      selected={values.groups || []}
                       onChange={onChange}
                       placeholder="Rechercher un groupe..."
                       getOptionLabel={(group) => group.nom}
@@ -382,6 +420,42 @@ const AdminProfessorsPage = () => {
                     {error ? <p className="mt-3 text-xs font-medium text-rose-600 dark:text-rose-300">{error}</p> : null}
                     <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
                       Selectionnez un ou plusieurs groupes lies a la formation choisie.
+                    </p>
+                  </div>
+                </div>
+              );
+            },
+          },
+          {
+            name: 'modules',
+            label: 'Modules',
+            type: 'custom',
+            fullWidth: true,
+            visible: (values) => Boolean(values.filiere_id),
+            render: ({ values, error, onChange }) => {
+              const availableModules = deps.modules.filter((module) => String(module.filiereId) === String(values.filiere_id));
+
+              return (
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Modules *</label>
+                  <div className="rounded-[22px] border border-white/70 bg-white/85 p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80">
+                    <SearchableMultiSelect
+                      options={availableModules}
+                      selected={values.modules || []}
+                      onChange={onChange}
+                      placeholder="Rechercher un module..."
+                      getOptionLabel={(module) => (module.code ? `${module.code} - ${module.nom}` : module.nom)}
+                      getOptionValue={(module) => module.id}
+                      getOptionSearchText={(module) => `${module.code || ''} ${module.nom} ${module.filiereName || ''}`}
+                      emptyMessage="Aucun module disponible pour cette formation."
+                      ariaLabel="Modules affectes"
+                      selectedLabel="Modules selectionnes"
+                      availableLabel="Modules disponibles"
+                      className="border-none bg-transparent p-0 shadow-none"
+                    />
+                    {error ? <p className="mt-3 text-xs font-medium text-rose-600 dark:text-rose-300">{error}</p> : null}
+                    <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                      Selectionnez un ou plusieurs modules lies a la formation choisie.
                     </p>
                   </div>
                 </div>
@@ -416,6 +490,12 @@ const AdminProfessorsPage = () => {
             fullWidth: true,
             renderValue: (_, item) => renderGroupBadges(item?.groupes || []),
           },
+          {
+            name: 'modules',
+            label: 'Modules affectes',
+            fullWidth: true,
+            renderValue: (_, item) => renderModuleBadges(item?.modules || []),
+          },
           { name: 'specialite', label: 'Specialite / Module' },
         ]}
         buildInitialValues={(item) => ({
@@ -430,8 +510,8 @@ const AdminProfessorsPage = () => {
           address: item?.user?.address || '',
           filiere_id: item?.filiere_id ? String(item.filiere_id) : '',
           formation: item?.filiere?.nom || item?.filier?.nom || '-',
-          specialite: item?.specialite || '',
-          group_ids: Array.isArray(item?.groupes) ? item.groupes.map((group) => String(group.id)) : [],
+          groups: Array.isArray(item?.groupes) ? item.groupes.map((group) => String(group.id)) : [],
+          modules: Array.isArray(item?.modules) ? item.modules.map((module) => String(module.id)) : [],
           password: '',
           confirm_password: '',
           status: item?.user?.is_active ? 'Actif' : 'Desactive',
@@ -443,9 +523,9 @@ const AdminProfessorsPage = () => {
           phone: values.phone,
           address: values.address,
           filiere_id: Number(values.filiere_id),
-          specialite: values.specialite,
           password: values.password,
-          group_ids: (values.group_ids || []).map((groupId) => Number(groupId)),
+          groups: (values.groups || []).map((groupId) => Number(groupId)),
+          modules: (values.modules || []).map((moduleId) => Number(moduleId)),
         })}
         validateForm={(values, mode) => {
           const errors = {};
@@ -456,7 +536,6 @@ const AdminProfessorsPage = () => {
             ['phone', 'Le telephone est requis.'],
             ['address', "L'adresse est requise."],
             ['filiere_id', 'La formation est requise.'],
-            ['specialite', 'La specialite est requise.'],
           ];
 
           requiredFields.forEach(([field, message]) => {
@@ -469,8 +548,12 @@ const AdminProfessorsPage = () => {
             errors.email = "L'adresse email n'est pas valide.";
           }
 
-          if (!Array.isArray(values.group_ids) || values.group_ids.length === 0) {
-            errors.group_ids = 'Veuillez sÃ©lectionner au moins un groupe.';
+          if (!Array.isArray(values.groups) || values.groups.length === 0) {
+            errors.groups = 'Au moins un groupe est obligatoire.';
+          }
+
+          if (!Array.isArray(values.modules) || values.modules.length === 0) {
+            errors.modules = 'Au moins un module est obligatoire.';
           }
 
           if (mode === 'create' || values.password || values.confirm_password) {

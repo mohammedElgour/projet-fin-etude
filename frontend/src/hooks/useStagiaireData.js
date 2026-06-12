@@ -22,6 +22,12 @@ const normalizeStagiaireNotes = (payload) => {
 
 export const useStagiaireData = () => {
   const [notes, setNotes] = useState([]);
+  const [transcriptSummary, setTranscriptSummary] = useState({
+    validatedModulesCount: 0,
+    totalModulesCount: 0,
+    nonValidatedModulesCount: 0,
+    transcriptAvailable: false,
+  });
   const [schedule, setSchedule] = useState([]);
   const [emploiDuTemps, setEmploiDuTemps] = useState(null);
   const [timetables, setTimetables] = useState([]);
@@ -48,9 +54,31 @@ export const useStagiaireData = () => {
         const errors = [];
 
         if (notesRes.status === 'fulfilled') {
-          setNotes(normalizeStagiaireNotes(notesRes.value));
+          const normalizedNotes = normalizeStagiaireNotes(notesRes.value);
+          const validatedModulesCount = Number(notesRes.value?.validated_modules_count ?? normalizedNotes.length);
+          const totalModulesCount = Number(notesRes.value?.total_modules_count ?? normalizedNotes.length);
+          const nonValidatedModulesCount = Number(
+            notesRes.value?.non_validated_modules_count ?? Math.max(totalModulesCount - validatedModulesCount, 0)
+          );
+
+          setNotes(normalizedNotes);
+          setTranscriptSummary({
+            validatedModulesCount,
+            totalModulesCount,
+            nonValidatedModulesCount,
+            transcriptAvailable: Boolean(
+              notesRes.value?.transcript_available ??
+                (totalModulesCount > 0 && validatedModulesCount === totalModulesCount)
+            ),
+          });
         } else {
           setNotes([]);
+          setTranscriptSummary({
+            validatedModulesCount: 0,
+            totalModulesCount: 0,
+            nonValidatedModulesCount: 0,
+            transcriptAvailable: false,
+          });
           errors.push(notesRes.reason?.response?.data?.message || notesRes.reason?.message);
         }
 
@@ -138,6 +166,7 @@ export const useStagiaireData = () => {
     timetableItems,
     announcements,
     recommendation,
+    transcriptSummary,
     loading,
     error,
   };

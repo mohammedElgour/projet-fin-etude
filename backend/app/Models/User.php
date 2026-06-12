@@ -19,6 +19,15 @@ class User extends Authenticatable
     use HasFactory, HasApiTokens, Notifiable;
 
     /**
+     * Append computed attributes to JSON responses.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = [
+        'profile_photo_url',
+    ];
+
+    /**
      * Get the stagiaire profile for the user.
      */
     public function stagiaire(): \Illuminate\Database\Eloquent\Relations\HasOne

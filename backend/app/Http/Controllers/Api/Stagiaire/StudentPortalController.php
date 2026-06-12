@@ -10,21 +10,28 @@ use App\Models\Stagiaire;
 use App\Models\Timetable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class StudentPortalController extends Controller
 {
-    public function notes(Request $request): JsonResponse
+    private const TRANSCRIPT_BLOCKED_MESSAGE = 'Le relevé de notes est disponible uniquement après validation de tous les modules.';
+
+    private function resolveStagiaire(Request $request): Stagiaire
     {
         $user = $request->user();
-        $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
 
+        return Stagiaire::with('groupe.filiere')->where('user_id', $user->id)->firstOrFail();
+    }
+
+    private function buildValidatedNotes(Stagiaire $stagiaire): Collection
+    {
         $notesQuery = Note::with('module')
             ->where('stagiaire_id', $stagiaire->id)
             ->orderByDesc('created_at');
 
         Note::applyWorkflowStatusFilter($notesQuery, Note::STATUS_VALIDATED);
 
-        $notes = $notesQuery->get()->map(function (Note $note) {
+        return $notesQuery->get()->map(function (Note $note) {
             $controle1 = $note->cc1 !== null ? (float) $note->cc1 : null;
             $controle2 = $note->cc2 !== null ? (float) $note->cc2 : null;
             $controle3 = $note->cc3 !== null ? (float) $note->cc3 : null;
@@ -46,9 +53,110 @@ class StudentPortalController extends Controller
                 'validation_status' => $note->workflowStatus(),
             ];
         })->values();
+    }
+
+    private function buildTranscriptStats(Stagiaire $stagiaire, Collection $notes): array
+    {
+        $totalModulesCount = (int) ($stagiaire->groupe?->filiere?->modules()->count() ?? 0);
+        $validatedModulesCount = (int) $notes->pluck('module_id')->unique()->count();
+        $nonValidatedModulesCount = max($totalModulesCount - $validatedModulesCount, 0);
+
+        $finalGrades = $notes
+            ->pluck('note')
+            ->filter(fn ($value) => $value !== null)
+            ->map(fn ($value) => (float) $value);
+
+        $average = $finalGrades->count()
+            ? round((float) $finalGrades->avg(), 2)
+            : 0.0;
+
+        return [
+            'total_modules_count' => $totalModulesCount,
+            'validated_modules_count' => $validatedModulesCount,
+            'non_validated_modules_count' => $nonValidatedModulesCount,
+            'average' => $average,
+            'mention' => $this->resolveMention($average),
+            'transcript_available' => $totalModulesCount > 0 && $validatedModulesCount === $totalModulesCount,
+        ];
+    }
+
+    private function resolveAcademicYear(): string
+    {
+        $currentYear = (int) now()->year;
+
+        return sprintf('%d-%d', $currentYear - 1, $currentYear);
+    }
+
+    private function resolveMention(float $average): string
+    {
+        if ($average >= 16) {
+            return 'Excellent';
+        }
+
+        if ($average >= 14) {
+            return 'Très Bien';
+        }
+
+        if ($average >= 12) {
+            return 'Bien';
+        }
+
+        if ($average >= 10) {
+            return 'Assez Bien';
+        }
+
+        return 'Passable';
+    }
+
+    public function notes(Request $request): JsonResponse
+    {
+        $stagiaire = $this->resolveStagiaire($request);
+        $notes = $this->buildValidatedNotes($stagiaire);
+        $stats = $this->buildTranscriptStats($stagiaire, $notes);
 
         return response()->json([
             'notes' => $notes,
+            'validated_modules_count' => $stats['validated_modules_count'],
+            'total_modules_count' => $stats['total_modules_count'],
+            'non_validated_modules_count' => $stats['non_validated_modules_count'],
+            'transcript_available' => $stats['transcript_available'],
+        ]);
+    }
+
+    public function transcript(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $stagiaire = $this->resolveStagiaire($request);
+        $notes = $this->buildValidatedNotes($stagiaire);
+        $stats = $this->buildTranscriptStats($stagiaire, $notes);
+
+        if (! $stats['transcript_available']) {
+            return response()->json([
+                'success' => false,
+                'message' => self::TRANSCRIPT_BLOCKED_MESSAGE,
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'student' => [
+                'id' => $stagiaire->id,
+                'code' => 'STG-'.$stagiaire->id,
+                'name' => $user->name,
+                'group' => $stagiaire->groupe?->nom ?? '-',
+                'filiere' => $stagiaire->groupe?->filiere?->nom ?? '-',
+                'academicYear' => $this->resolveAcademicYear(),
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'address' => $user->address,
+            ],
+            'notes' => $notes,
+            'validated_modules_count' => $stats['validated_modules_count'],
+            'total_modules_count' => $stats['total_modules_count'],
+            'non_validated_modules_count' => $stats['non_validated_modules_count'],
+            'average' => $stats['average'],
+            'mention' => $stats['mention'],
+            'generated_at' => now()->toISOString(),
         ]);
     }
 

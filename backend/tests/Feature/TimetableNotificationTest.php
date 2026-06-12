@@ -41,7 +41,7 @@ class TimetableNotificationTest extends TestCase
             ->post('/api/admin/timetables', [
                 'title' => 'Planning DD101',
                 'image' => UploadedFile::fake()->image('planning-dd101.png'),
-                'groupe_id' => $groupe->id,
+                'group_ids' => [$groupe->id],
             ])
             ->assertCreated();
 
@@ -84,7 +84,7 @@ class TimetableNotificationTest extends TestCase
             ->post('/api/admin/timetables', [
                 'title' => 'Planning professeur',
                 'image' => UploadedFile::fake()->image('planning-prof.png'),
-                'professeur_id' => $professorUser->professeur->id,
+                'teacher_id' => $professorUser->professeur->id,
             ])
             ->assertCreated();
 
@@ -101,5 +101,27 @@ class TimetableNotificationTest extends TestCase
             'title' => 'Emploi du temps',
             'message' => 'Votre emploi du temps a été mis à jour',
         ]);
+    }
+
+    public function test_timetable_creation_rejects_empty_group_and_professor_selection(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Storage::fake('public');
+
+        Sanctum::actingAs(User::where('email', 'admin@ista.test')->firstOrFail());
+
+        $this->withHeader('Accept', 'application/json')
+            ->post('/api/admin/timetables', [
+                'title' => 'Planning invalide',
+                'image' => UploadedFile::fake()->image('planning-invalid.png'),
+                'group_ids' => [],
+                'teacher_id' => null,
+            ])
+            ->assertUnprocessable()
+            ->assertJson([
+                'message' => 'Veuillez sélectionner au moins un groupe ou un professeur.',
+            ])
+            ->assertJsonValidationErrors('groupe_ids');
     }
 }

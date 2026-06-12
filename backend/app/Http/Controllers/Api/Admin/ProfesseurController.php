@@ -4,13 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Groupe;
+use App\Models\Module;
 use App\Models\Professeur;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class ProfesseurController extends Controller
@@ -26,31 +27,37 @@ class ProfesseurController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = max(1, min($request->integer('per_page', 15), 200));
-        $professeurs = Professeur::with(['user', 'filier', 'groupes.filiere'])->paginate($perPage);
+        $professeurs = Professeur::with(['user', 'filier', 'groupes.filiere', 'modules.filiere'])->paginate($perPage);
 
         return response()->json($professeurs);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $payload = $this->normalizeAssignmentPayload($request);
+
+        $validated = Validator::make($payload, [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'string', 'max:30'],
             'address' => ['required', 'string'],
             'filiere_id' => ['required', 'exists:filiers,id'],
-            'specialite' => ['required', 'string', 'max:255'],
-            'group_ids' => ['required', 'array', 'min:1'],
-            'group_ids.*' => ['integer', 'distinct', 'exists:groupes,id'],
+            'groups' => ['required', 'array', 'min:1'],
+            'groups.*' => ['integer', 'distinct', 'exists:groupes,id'],
+            'modules' => ['required', 'array', 'min:1'],
+            'modules.*' => ['integer', 'distinct', 'exists:modules,id'],
             'password' => ['required', 'string', 'min:8'],
         ], [
-            'group_ids.required' => 'Veuillez sÃ©lectionner au moins un groupe.',
-            'group_ids.min' => 'Veuillez sÃ©lectionner au moins un groupe.',
-        ]);
+            'groups.required' => 'Au moins un groupe est obligatoire.',
+            'groups.min' => 'Au moins un groupe est obligatoire.',
+            'modules.required' => 'Au moins un module est obligatoire.',
+            'modules.min' => 'Au moins un module est obligatoire.',
+        ])->validate();
 
         $result = DB::transaction(function () use ($validated) {
-            $groupIds = $this->validateGroupAssignments((int) $validated['filiere_id'], $validated['group_ids']);
+            $groupIds = $this->validateGroupAssignments((int) $validated['filiere_id'], $validated['groups']);
+            $moduleIds = $this->validateModuleAssignments((int) $validated['filiere_id'], $validated['modules']);
 
             $user = User::create([
                 'name' => $this->buildDisplayName($validated),
@@ -66,13 +73,14 @@ class ProfesseurController extends Controller
 
             $professeur = Professeur::create([
                 'user_id' => $user->id,
-                'specialite' => $validated['specialite'],
+                'specialite' => $this->resolveSpecialiteFromModules($moduleIds),
                 'filiere_id' => $validated['filiere_id'],
             ]);
 
             $professeur->groupes()->sync($groupIds);
+            $professeur->modules()->sync($moduleIds);
 
-            return $professeur->fresh()->load(['user', 'filier', 'groupes.filiere']);
+            return $professeur->fresh()->load(['user', 'filier', 'groupes.filiere', 'modules.filiere']);
         });
 
         return response()->json($result, 201);
@@ -80,17 +88,37 @@ class ProfesseurController extends Controller
 
     public function show(Professeur $professeur): JsonResponse
     {
-        $professeur->load(['user', 'filier', 'groupes.filiere']);
+        $professeur->load(['user', 'filier', 'groupes.filiere', 'modules.filiere']);
 
         return response()->json($professeur);
     }
 
     public function update(Request $request, Professeur $professeur): JsonResponse
     {
-        $validated = $request->validate([
+        $payload = $this->normalizeAssignmentPayload($request);
+
+        $rules = [
             'is_active' => ['sometimes', 'boolean'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
-        ]);
+        ];
+
+        $messages = [];
+
+        if (array_key_exists('groups', $payload)) {
+            $rules['groups'] = ['required', 'array', 'min:1'];
+            $rules['groups.*'] = ['integer', 'distinct', 'exists:groupes,id'];
+            $messages['groups.required'] = 'Au moins un groupe est obligatoire.';
+            $messages['groups.min'] = 'Au moins un groupe est obligatoire.';
+        }
+
+        if (array_key_exists('modules', $payload)) {
+            $rules['modules'] = ['required', 'array', 'min:1'];
+            $rules['modules.*'] = ['integer', 'distinct', 'exists:modules,id'];
+            $messages['modules.required'] = 'Au moins un module est obligatoire.';
+            $messages['modules.min'] = 'Au moins un module est obligatoire.';
+        }
+
+        $validated = Validator::make($payload, $rules, $messages)->validate();
 
         $userData = [];
 
@@ -102,11 +130,25 @@ class ProfesseurController extends Controller
             $userData['password'] = Hash::make($validated['password']);
         }
 
-        if (! empty($userData)) {
-            $professeur->user()->update($userData);
-        }
+        DB::transaction(function () use ($professeur, $validated, $userData) {
+            if (array_key_exists('groups', $validated)) {
+                $groupIds = $this->validateGroupAssignments((int) $professeur->filiere_id, $validated['groups']);
+                $professeur->groupes()->sync($groupIds);
+            }
 
-        return response()->json($professeur->fresh()->load(['user', 'filier', 'groupes.filiere']));
+            if (array_key_exists('modules', $validated)) {
+                $moduleIds = $this->validateModuleAssignments((int) $professeur->filiere_id, $validated['modules']);
+                $professeur->modules()->sync($moduleIds);
+                $professeur->specialite = $this->resolveSpecialiteFromModules($moduleIds);
+                $professeur->save();
+            }
+
+            if (! empty($userData)) {
+                $professeur->user()->update($userData);
+            }
+        });
+
+        return response()->json($professeur->fresh()->load(['user', 'filier', 'groupes.filiere', 'modules.filiere']));
     }
 
     public function destroy(Professeur $professeur): JsonResponse
@@ -142,10 +184,68 @@ class ProfesseurController extends Controller
 
         if (count($allowedGroupIds) !== $normalizedGroupIds->count()) {
             throw ValidationException::withMessages([
-                'group_ids' => ['Les groupes sélectionnés doivent appartenir à la formation choisie.'],
+                'groups' => ['Les groupes sélectionnés doivent appartenir à la formation choisie.'],
             ]);
         }
 
         return $allowedGroupIds;
+    }
+
+    /**
+     * @param array<int, int|string> $moduleIds
+     * @return array<int, int>
+     */
+    private function validateModuleAssignments(int $filiereId, array $moduleIds): array
+    {
+        $normalizedModuleIds = collect($moduleIds)
+            ->map(fn ($moduleId) => (int) $moduleId)
+            ->unique()
+            ->values();
+
+        $allowedModuleIds = Module::query()
+            ->where('filiere_id', $filiereId)
+            ->whereIn('id', $normalizedModuleIds->all())
+            ->pluck('id')
+            ->map(fn ($moduleId) => (int) $moduleId)
+            ->all();
+
+        if (count($allowedModuleIds) !== $normalizedModuleIds->count()) {
+            throw ValidationException::withMessages([
+                'modules' => ['Les modules sélectionnés doivent appartenir à la formation choisie.'],
+            ]);
+        }
+
+        return $allowedModuleIds;
+    }
+
+    /**
+     * @param array<int, int> $moduleIds
+     */
+    private function resolveSpecialiteFromModules(array $moduleIds): ?string
+    {
+        $firstModuleId = $moduleIds[0] ?? null;
+
+        if (! $firstModuleId) {
+            return null;
+        }
+
+        return Module::query()
+            ->whereKey($firstModuleId)
+            ->value('nom');
+    }
+
+    private function normalizeAssignmentPayload(Request $request): array
+    {
+        $payload = $request->all();
+
+        if ($request->hasAny(['groups', 'group_ids'])) {
+            $payload['groups'] = $request->input('groups', $request->input('group_ids', []));
+        }
+
+        if ($request->hasAny(['modules', 'module_ids'])) {
+            $payload['modules'] = $request->input('modules', $request->input('module_ids', []));
+        }
+
+        return $payload;
     }
 }

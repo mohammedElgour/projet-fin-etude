@@ -84,6 +84,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/profile', [ProfileController::class, 'show']);
         Route::put('/profile', [ProfileController::class, 'update']);
         Route::get('/notes', [StudentPortalController::class, 'notes']);
+        Route::get('/releve-de-notes', [StudentPortalController::class, 'transcript']);
         Route::get('/emploi-du-temps', [StudentPortalController::class, 'emploiDuTemps']);
         Route::get('/schedule', [StudentPortalController::class, 'schedule']);
         Route::get('/timetables', [AdminTimetableController::class, 'index']);
