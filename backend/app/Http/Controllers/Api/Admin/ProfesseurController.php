@@ -27,7 +27,7 @@ class ProfesseurController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = max(1, min($request->integer('per_page', 15), 200));
-        $professeurs = Professeur::with(['user', 'filier', 'groupes.filiere', 'modules.filiere'])->paginate($perPage);
+        $professeurs = Professeur::with(['user', 'groupes.filiere', 'modules.filiere'])->paginate($perPage);
 
         return response()->json($professeurs);
     }
@@ -40,9 +40,8 @@ class ProfesseurController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'phone' => ['required', 'string', 'max:30'],
-            'address' => ['required', 'string'],
-            'filiere_id' => ['required', 'exists:filiers,id'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'address' => ['nullable', 'string'],
             'groups' => ['required', 'array', 'min:1'],
             'groups.*' => ['integer', 'distinct', 'exists:groupes,id'],
             'modules' => ['required', 'array', 'min:1'],
@@ -56,16 +55,16 @@ class ProfesseurController extends Controller
         ])->validate();
 
         $result = DB::transaction(function () use ($validated) {
-            $groupIds = $this->validateGroupAssignments((int) $validated['filiere_id'], $validated['groups']);
-            $moduleIds = $this->validateModuleAssignments((int) $validated['filiere_id'], $validated['modules']);
+            $groupIds = $this->validateGroupAssignments($validated['groups']);
+            $moduleIds = $this->validateModuleAssignments($validated['modules']);
 
             $user = User::create([
                 'name' => $this->buildDisplayName($validated),
                 'first_name' => $validated['first_name'],
                 'last_name' => $validated['last_name'],
                 'email' => $validated['email'],
-                'phone' => $validated['phone'],
-                'address' => $validated['address'],
+                'phone' => $validated['phone'] ?? null,
+                'address' => $validated['address'] ?? null,
                 'password' => Hash::make($validated['password']),
                 'role' => 'professeur',
                 'is_active' => true,
@@ -74,13 +73,12 @@ class ProfesseurController extends Controller
             $professeur = Professeur::create([
                 'user_id' => $user->id,
                 'specialite' => $this->resolveSpecialiteFromModules($moduleIds),
-                'filiere_id' => $validated['filiere_id'],
             ]);
 
             $professeur->groupes()->sync($groupIds);
             $professeur->modules()->sync($moduleIds);
 
-            return $professeur->fresh()->load(['user', 'filier', 'groupes.filiere', 'modules.filiere']);
+            return $professeur->fresh()->load(['user', 'groupes.filiere', 'modules.filiere']);
         });
 
         return response()->json($result, 201);
@@ -88,7 +86,7 @@ class ProfesseurController extends Controller
 
     public function show(Professeur $professeur): JsonResponse
     {
-        $professeur->load(['user', 'filier', 'groupes.filiere', 'modules.filiere']);
+        $professeur->load(['user', 'groupes.filiere', 'modules.filiere']);
 
         return response()->json($professeur);
     }
@@ -132,12 +130,12 @@ class ProfesseurController extends Controller
 
         DB::transaction(function () use ($professeur, $validated, $userData) {
             if (array_key_exists('groups', $validated)) {
-                $groupIds = $this->validateGroupAssignments((int) $professeur->filiere_id, $validated['groups']);
+                $groupIds = $this->validateGroupAssignments($validated['groups']);
                 $professeur->groupes()->sync($groupIds);
             }
 
             if (array_key_exists('modules', $validated)) {
-                $moduleIds = $this->validateModuleAssignments((int) $professeur->filiere_id, $validated['modules']);
+                $moduleIds = $this->validateModuleAssignments($validated['modules']);
                 $professeur->modules()->sync($moduleIds);
                 $professeur->specialite = $this->resolveSpecialiteFromModules($moduleIds);
                 $professeur->save();
@@ -148,7 +146,7 @@ class ProfesseurController extends Controller
             }
         });
 
-        return response()->json($professeur->fresh()->load(['user', 'filier', 'groupes.filiere', 'modules.filiere']));
+        return response()->json($professeur->fresh()->load(['user', 'groupes.filiere', 'modules.filiere']));
     }
 
     public function destroy(Professeur $professeur): JsonResponse
@@ -156,6 +154,7 @@ class ProfesseurController extends Controller
         DB::transaction(function () use ($professeur) {
             $user = $professeur->user;
             $professeur->delete();
+
             if ($user) {
                 $user->delete();
             }
@@ -168,7 +167,7 @@ class ProfesseurController extends Controller
      * @param array<int, int|string> $groupIds
      * @return array<int, int>
      */
-    private function validateGroupAssignments(int $filiereId, array $groupIds): array
+    private function validateGroupAssignments(array $groupIds): array
     {
         $normalizedGroupIds = collect($groupIds)
             ->map(fn ($groupId) => (int) $groupId)
@@ -176,7 +175,6 @@ class ProfesseurController extends Controller
             ->values();
 
         $allowedGroupIds = Groupe::query()
-            ->where('filiere_id', $filiereId)
             ->whereIn('id', $normalizedGroupIds->all())
             ->pluck('id')
             ->map(fn ($groupId) => (int) $groupId)
@@ -184,7 +182,7 @@ class ProfesseurController extends Controller
 
         if (count($allowedGroupIds) !== $normalizedGroupIds->count()) {
             throw ValidationException::withMessages([
-                'groups' => ['Les groupes sélectionnés doivent appartenir à la formation choisie.'],
+                'groups' => ['Les groupes selectionnes sont invalides.'],
             ]);
         }
 
@@ -195,7 +193,7 @@ class ProfesseurController extends Controller
      * @param array<int, int|string> $moduleIds
      * @return array<int, int>
      */
-    private function validateModuleAssignments(int $filiereId, array $moduleIds): array
+    private function validateModuleAssignments(array $moduleIds): array
     {
         $normalizedModuleIds = collect($moduleIds)
             ->map(fn ($moduleId) => (int) $moduleId)
@@ -203,7 +201,6 @@ class ProfesseurController extends Controller
             ->values();
 
         $allowedModuleIds = Module::query()
-            ->where('filiere_id', $filiereId)
             ->whereIn('id', $normalizedModuleIds->all())
             ->pluck('id')
             ->map(fn ($moduleId) => (int) $moduleId)
@@ -211,7 +208,7 @@ class ProfesseurController extends Controller
 
         if (count($allowedModuleIds) !== $normalizedModuleIds->count()) {
             throw ValidationException::withMessages([
-                'modules' => ['Les modules sélectionnés doivent appartenir à la formation choisie.'],
+                'modules' => ['Les modules selectionnes sont invalides.'],
             ]);
         }
 

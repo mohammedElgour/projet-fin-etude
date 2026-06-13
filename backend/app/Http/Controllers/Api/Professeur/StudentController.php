@@ -74,15 +74,23 @@ class StudentController extends Controller
     public function catalog(Request $request): JsonResponse
     {
         $professeur = $this->resolveProfessorProfile($request);
-        $professeur->loadMissing(['groupes', 'modules', 'filiere']);
+        $professeur->loadMissing(['groupes.filiere', 'modules.filiere']);
+
+        $filieres = $professeur->groupes
+            ->pluck('filiere')
+            ->filter()
+            ->unique('id')
+            ->sortBy('nom')
+            ->values()
+            ->map(fn ($filiere) => [
+                'id' => $filiere->id,
+                'nom' => $filiere->nom,
+            ]);
 
         return response()->json([
             'groupes' => $professeur->groupes->loadMissing('filiere')->sortBy('nom')->values(),
             'modules' => $professeur->modules->loadMissing('filiere')->sortBy('nom')->values(),
-            'filiere' => $professeur->filiere ? [
-                'id' => $professeur->filiere->id,
-                'nom' => $professeur->filiere->nom,
-            ] : null,
+            'filieres' => $filieres,
         ]);
 
     }

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Groupe;
 use App\Models\Module;
 use App\Models\Note;
+use App\Models\Professeur;
 use App\Models\Stagiaire;
 use App\Models\Timetable;
 use App\Models\User;
@@ -16,26 +18,78 @@ class ProfessorScopeTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_professor_catalog_is_limited_to_his_filiere(): void
+    public function test_professor_catalog_returns_all_assigned_group_filieres(): void
     {
         $this->seed(DatabaseSeeder::class);
 
-        Sanctum::actingAs(User::where('email', 'prof@ista.test')->firstOrFail());
+        $professorUser = User::where('email', 'prof@ista.test')->firstOrFail();
+        $professor = $professorUser->professeur;
+
+        $ddGroup = Groupe::query()->where('nom', 'DD101')->firstOrFail();
+        $infraGroup = Groupe::query()->where('nom', 'ID201')->firstOrFail();
+        $ddModule = Module::query()->where('filiere_id', $ddGroup->filiere_id)->where('code', 'M104')->firstOrFail();
+        $infraModule = Module::query()->where('filiere_id', $infraGroup->filiere_id)->where('code', 'M103')->firstOrFail();
+
+        $professor->groupes()->sync([$ddGroup->id, $infraGroup->id]);
+        $professor->modules()->sync([$ddModule->id, $infraModule->id]);
+
+        Sanctum::actingAs($professorUser);
 
         $response = $this->getJson('/api/professeur/catalog')
             ->assertOk()
             ->json();
 
         $groupNames = collect($response['groupes'] ?? [])->pluck('nom');
-        $moduleFilieres = collect($response['modules'] ?? [])->pluck('filiere.nom');
+        $filieres = collect($response['filieres'] ?? [])->pluck('nom');
 
         $this->assertTrue($groupNames->contains('DD101'));
-        $this->assertTrue($groupNames->contains('DD102'));
-        $this->assertFalse($groupNames->contains('ID201'));
-        $this->assertTrue($moduleFilieres->every(fn ($name) => $name === 'Développement Digital'));
+        $this->assertTrue($groupNames->contains('ID201'));
+        $this->assertTrue($filieres->contains($ddGroup->filiere->nom));
+        $this->assertTrue($filieres->contains($infraGroup->filiere->nom));
     }
 
-    public function test_professor_cannot_insert_note_outside_his_filiere(): void
+    public function test_admin_can_create_professor_without_selecting_filiere(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $admin = User::where('role', 'admin')->firstOrFail();
+        $ddGroup = Groupe::query()->where('nom', 'DD101')->firstOrFail();
+        $infraGroup = Groupe::query()->where('nom', 'ID201')->firstOrFail();
+        $ddModule = Module::query()->where('filiere_id', $ddGroup->filiere_id)->where('code', 'M104')->firstOrFail();
+        $infraModule = Module::query()->where('filiere_id', $infraGroup->filiere_id)->where('code', 'M103')->firstOrFail();
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->postJson('/api/admin/professeurs', [
+            'first_name' => 'Yassine',
+            'last_name' => 'El Amrani',
+            'email' => 'yassine.amrani@ista.test',
+            'password' => 'password123',
+            'groups' => [$ddGroup->id, $infraGroup->id],
+            'modules' => [$ddModule->id, $infraModule->id],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('user.email', 'yassine.amrani@ista.test');
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'yassine.amrani@ista.test',
+            'role' => 'professeur',
+        ]);
+
+        $createdProfessor = Professeur::query()
+            ->whereHas('user', fn ($query) => $query->where('email', 'yassine.amrani@ista.test'))
+            ->with(['groupes.filiere', 'modules.filiere'])
+            ->firstOrFail();
+
+        $this->assertCount(2, $createdProfessor->groupes);
+        $this->assertCount(2, $createdProfessor->modules);
+        $this->assertCount(2, $response->json('filieres'));
+        $this->assertTrue(collect($response->json('filieres'))->pluck('nom')->contains($ddGroup->filiere->nom));
+        $this->assertTrue(collect($response->json('filieres'))->pluck('nom')->contains($infraGroup->filiere->nom));
+    }
+
+    public function test_professor_cannot_insert_note_outside_his_assignments(): void
     {
         $this->seed(DatabaseSeeder::class);
 

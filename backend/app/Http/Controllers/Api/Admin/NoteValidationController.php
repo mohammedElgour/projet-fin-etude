@@ -9,7 +9,9 @@ use App\Http\Resources\Admin\NoteSubmissionResource;
 use App\Http\Resources\Professeur\ProfessorNoteResource;
 use App\Models\Note;
 use App\Models\NoteSubmission;
+use App\Models\Stagiaire;
 use App\Services\NotificationDeliveryService;
+use App\Services\StagiaireResultEmailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -19,8 +21,10 @@ use Throwable;
 
 class NoteValidationController extends Controller
 {
-    public function __construct(private NotificationDeliveryService $notifications)
-    {
+    public function __construct(
+        private NotificationDeliveryService $notifications,
+        private StagiaireResultEmailService $resultsEmails
+    ) {
     }
 
     protected function calculateAverage(array $validated): ?float
@@ -158,6 +162,19 @@ class NoteValidationController extends Controller
             'Validation des notes',
             str_replace(':module', $submission->module?->nom ?? 'ce module', $messageTemplate)
         );
+
+        $this->notifyResultsAvailability($submission);
+    }
+
+    protected function notifyResultsAvailability(NoteSubmission $submission): void
+    {
+        $submission->loadMissing(['notes.stagiaire.user', 'notes.stagiaire.groupe.filiere']);
+
+        $submission->notes
+            ->pluck('stagiaire')
+            ->filter()
+            ->unique('id')
+            ->each(fn (Stagiaire $stagiaire) => $this->resultsEmails->notifyIfReady($stagiaire));
     }
 
     protected function approveSubmission(NoteSubmission $submission): NoteSubmission

@@ -8,6 +8,7 @@ const normalizeCatalog = (response) => {
   return {
     groupes: Array.isArray(payload.groupes) ? payload.groupes : [],
     modules: Array.isArray(payload.modules) ? payload.modules : [],
+    filieres: Array.isArray(payload.filieres) ? payload.filieres : [],
   };
 };
 
@@ -86,11 +87,7 @@ export const useProfesseurData = () => {
       console.error('Dashboard loading error:', error);
 
       const apiMessage = error?.response?.data?.message;
-      if (apiMessage === 'Professor has no filiere assigned') {
-        setError('Aucune filiere assignee a ce professeur');
-      } else {
-        setError(apiMessage || 'Impossible de charger les donnees professeur.');
-      }
+      setError(apiMessage || 'Impossible de charger les donnees professeur.');
 
       setStudents([]);
       setSchedule([]);
