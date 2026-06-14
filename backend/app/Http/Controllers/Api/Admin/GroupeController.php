@@ -11,7 +11,10 @@ class GroupeController extends Controller
 {
     public function index(Request $request)
     {
-        $groupes = Groupe::with('filier')->withCount('stagiaires')->paginate($request->integer('per_page', 10));
+        $groupes = Groupe::with('filier')
+            ->withCount('stagiaires')
+            ->orderByDesc('id')
+            ->paginate($request->integer('per_page', 10));
 
         return GroupeResource::collection($groupes);
     }

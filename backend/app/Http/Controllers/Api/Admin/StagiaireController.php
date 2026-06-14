@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class StagiaireController extends Controller
@@ -24,47 +25,66 @@ class StagiaireController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = max(1, min($request->integer('per_page', 15), 200));
-        $stagiaires = Stagiaire::with(['user', 'groupe.filier'])->paginate($perPage);
+        $stagiaires = Stagiaire::with(['user', 'groupe.filier'])
+            ->orderByDesc('id')
+            ->paginate($perPage);
 
         return response()->json($stagiaires);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'first_name' => ['required', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'phone' => ['required', 'string', 'max:30'],
-            'address' => ['required', 'string'],
-            'date_of_birth' => ['required', 'date'],
-            'password' => ['required', 'string', 'min:8'],
-            'groupe_id' => ['required', 'exists:groupes,id'],
-        ]);
-
-        $result = DB::transaction(function () use ($validated) {
-            $user = User::create([
-                'name' => $this->buildDisplayName($validated),
-                'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'phone' => $validated['phone'],
-                'address' => $validated['address'],
-                'date_of_birth' => $validated['date_of_birth'],
-                'password' => Hash::make($validated['password']),
-                'role' => 'stagiaire',
-                'is_active' => true,
+        try {
+            $validated = $request->validate([
+                'first_name' => ['required', 'string', 'max:255'],
+                'last_name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+                'phone' => ['required', 'string', 'max:30'],
+                'address' => ['required', 'string'],
+                'date_of_birth' => ['required', 'date'],
+                'password' => ['required', 'string', 'min:8'],
+                'groupe_id' => ['required', 'exists:groupes,id'],
             ]);
 
-            $stagiaire = Stagiaire::create([
-                'user_id' => $user->id,
+            $result = DB::transaction(function () use ($validated) {
+                $user = User::create([
+                    'name' => $this->buildDisplayName($validated),
+                    'first_name' => $validated['first_name'],
+                    'last_name' => $validated['last_name'],
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'],
+                    'address' => $validated['address'],
+                    'date_of_birth' => $validated['date_of_birth'],
+                    'password' => Hash::make($validated['password']),
+                    'role' => 'stagiaire',
+                    'is_active' => true,
+                ]);
+
+                $stagiaire = Stagiaire::create([
+                    'user_id' => $user->id,
+                    'groupe_id' => $validated['groupe_id'],
+                ]);
+
+                return $stagiaire->load(['user', 'groupe.filier']);
+            });
+
+            Log::info('Stagiaire created successfully.', [
+                'stagiaire_id' => $result->id,
+                'user_id' => $result->user_id,
+                'email' => $validated['email'],
                 'groupe_id' => $validated['groupe_id'],
             ]);
 
-            return $stagiaire->load(['user', 'groupe.filier']);
-        });
+            return response()->json($result, 201);
+        } catch (\Throwable $exception) {
+            Log::error('Failed to create stagiaire.', [
+                'message' => $exception->getMessage(),
+                'email' => $request->input('email'),
+                'groupe_id' => $request->input('groupe_id'),
+            ]);
 
-        return response()->json($result, 201);
+            throw $exception;
+        }
     }
 
     public function show(Stagiaire $stagiaire): JsonResponse

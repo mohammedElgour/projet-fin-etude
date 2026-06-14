@@ -13,8 +13,8 @@ return new class extends Migration
         }
 
         Schema::table('professeurs', function (Blueprint $table) {
-            $table->dropIndex(['filiere_id']);
             $table->dropForeign(['filiere_id']);
+            $table->dropIndex(['filiere_id']);
             $table->dropColumn('filiere_id');
         });
     }

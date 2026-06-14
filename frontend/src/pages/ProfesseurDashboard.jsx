@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { BookCheck, CalendarRange, ChartSpline, UsersRound, TrendingUp } from 'lucide-react';
 
 import { BarChart, ChartCard, LineChart, PieChart } from '../components/charts/SimpleCharts';
 import StatCard from '../components/dashboard/StatCard';
 import { useProfesseurData } from '../hooks/useProfesseurData';
-import { api } from '../services/api';
 
 import SectionHeader from '../components/dashboard/SectionHeader';
 import KpiGrid from '../components/dashboard/KpiGrid';
@@ -37,14 +36,12 @@ const getStudentStatus = (row) => {
   }
 
   const controlsAverage = (Number(row.cc1) + Number(row.cc2) + Number(row.cc3)) / 3;
-  const moyenne = (controlsAverage * 0.4) + (Number(row.efm) * 0.6);
+  const moyenne = (controlsAverage * 0.4) + ((Number(row.efm) / 2) * 0.6);
 
   return moyenne >= 10
     ? { key: 'validated', label: 'Valide', moyenne }
     : { key: 'rejected', label: 'Non valide', moyenne };
 };
-
-const getProfessorTimetables = (payload) => (Array.isArray(payload?.emploi_du_temps) ? payload.emploi_du_temps : []);
 
 const formatDate = (value) => {
   if (!value) {
@@ -61,46 +58,7 @@ const formatDate = (value) => {
 };
 
 const ProfesseurDashboard = () => {
-  const { rows, scheduleItems, selectedModule, error, loading } = useProfesseurData();
-  const [emploiDuTemps, setEmploiDuTemps] = useState([]);
-  const [emploiDuTempsLoading, setEmploiDuTempsLoading] = useState(true);
-  const [emploiDuTempsError, setEmploiDuTempsError] = useState('');
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadEmploiDuTemps = async () => {
-      setEmploiDuTempsLoading(true);
-      setEmploiDuTempsError('');
-
-      try {
-        const response = await api.get('/professeur/emploi-du-temps');
-
-        if (!isMounted) {
-          return;
-        }
-
-        setEmploiDuTemps(getProfessorTimetables(response.data));
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setEmploiDuTemps([]);
-        setEmploiDuTempsError(error?.response?.data?.message || 'Impossible de charger votre emploi du temps.');
-      } finally {
-        if (isMounted) {
-          setEmploiDuTempsLoading(false);
-        }
-      }
-    };
-
-    loadEmploiDuTemps();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const { rows, scheduleItems, timetableItems, selectedModule, error, loading } = useProfesseurData();
 
   const averageGrade = useMemo(() => {
     const values = (rows || [])
@@ -260,17 +218,7 @@ const ProfesseurDashboard = () => {
             <p className="text-sm text-slate-500 dark:text-slate-400">Seuls les emplois du temps qui vous sont assignes sont affiches.</p>
           </div>
 
-          {emploiDuTempsError ? (
-            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
-              {emploiDuTempsError}
-            </div>
-          ) : null}
-
-          {emploiDuTempsLoading ? (
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">
-              Chargement de votre emploi du temps...
-            </div>
-          ) : emploiDuTemps.length > 0 ? (
+          {timetableItems.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
                 <thead>
@@ -283,16 +231,16 @@ const ProfesseurDashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-900">
-                  {emploiDuTemps.map((item) => (
+                  {timetableItems.map((item) => (
                     <tr key={item.id} className="text-slate-700 dark:text-slate-200">
                       <td className="px-3 py-2">{item.title || 'Emploi du temps'}</td>
-                      <td className="px-3 py-2">{item.groupe?.nom || '-'}</td>
-                      <td className="px-3 py-2">{item.groupe?.filiere?.nom || '-'}</td>
-                      <td className="px-3 py-2">{formatDate(item.created_at)}</td>
+                      <td className="px-3 py-2">{item.groupe || '-'}</td>
+                      <td className="px-3 py-2">{item.filiere || '-'}</td>
+                      <td className="px-3 py-2">{formatDate(item.createdAt)}</td>
                       <td className="px-3 py-2">
-                        {item.image_url ? (
+                        {item.imageUrl ? (
                           <a
-                            href={item.image_url}
+                            href={item.imageUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="font-medium text-sky-600 transition hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"

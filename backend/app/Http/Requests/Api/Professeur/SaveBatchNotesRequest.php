@@ -21,7 +21,7 @@ class SaveBatchNotesRequest extends FormRequest
             'notes.*.controle_1' => ['nullable', 'numeric', 'min:0', 'max:20'],
             'notes.*.controle_2' => ['nullable', 'numeric', 'min:0', 'max:20'],
             'notes.*.controle_3' => ['nullable', 'numeric', 'min:0', 'max:20'],
-            'notes.*.efm' => ['nullable', 'numeric', 'min:0', 'max:20'],
+            'notes.*.efm' => ['nullable', 'numeric', 'min:0', 'max:40'],
         ];
     }
 }

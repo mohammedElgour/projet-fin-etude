@@ -41,7 +41,7 @@ class NoteValidationController extends Controller
             (float) ($validated['cc1'] ?? 0) +
             (float) ($validated['cc2'] ?? 0) +
             (float) ($validated['cc3'] ?? 0) +
-            ((float) ($validated['efm'] ?? 0) * 2)
+            (float) ($validated['efm'] ?? 0)
         ) / 5), 2);
     }
 

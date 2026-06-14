@@ -59,7 +59,7 @@ class AdminTimetableController extends Controller
             }
 
             return response()->json(
-                $query->paginate(20)->through(fn (Timetable $timetable) => $this->transformTimetable($timetable))
+                $query->paginate(20)->through(fn (Timetable $timetable) => $this->transformTimetable($timetable, $user->role))
             );
         } catch (Throwable $exception) {
             Log::error('Failed to fetch timetables list.', [
@@ -117,7 +117,7 @@ class AdminTimetableController extends Controller
 
             $this->notifyTimetableRecipients($timetable);
 
-            return response()->json($this->transformTimetable($timetable), 201);
+            return response()->json($this->transformTimetable($timetable, $request->user()->role), 201);
         } catch (Throwable $exception) {
             Log::error('Failed to store timetable.', [
                 'user_id' => $request->user()?->id,
@@ -137,7 +137,7 @@ class AdminTimetableController extends Controller
 
             abort_unless($this->canAccessTimetable($request->user(), $timetable), 403, 'Acces non autorise a cet emploi du temps.');
 
-            return response()->json($this->transformTimetable($timetable));
+            return response()->json($this->transformTimetable($timetable, $request->user()->role));
         } catch (Throwable $exception) {
             Log::error('Failed to fetch timetable details.', [
                 'user_id' => $request->user()?->id,
@@ -147,6 +147,39 @@ class AdminTimetableController extends Controller
 
             return response()->json([
                 'message' => 'Unable to load this timetable at the moment.',
+            ], 500);
+        }
+    }
+
+    public function download(Request $request, Timetable $timetable)
+    {
+        $timetable->load(['groupes', 'professeurs']);
+
+        if (! $this->canAccessTimetable($request->user(), $timetable)) {
+            return response()->json([
+                'message' => 'Acces non autorise a cet emploi du temps.',
+            ], 403);
+        }
+
+        $path = $this->resolveStoragePath($timetable->image_path);
+
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return response()->json([
+                'message' => 'Fichier introuvable.',
+            ], 404);
+        }
+
+        try {
+            return Storage::disk('public')->download($path, basename($path));
+        } catch (Throwable $exception) {
+            Log::error('Failed to download timetable.', [
+                'user_id' => $request->user()?->id,
+                'timetable_id' => $timetable->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to download this timetable at the moment.',
             ], 500);
         }
     }
@@ -198,7 +231,7 @@ class AdminTimetableController extends Controller
                 return $timetable->load(['groupe.filier', 'groupes.filier', 'professeurs.user', 'creator', 'uploader']);
             });
 
-            return response()->json($this->transformTimetable($updated));
+            return response()->json($this->transformTimetable($updated, $request->user()->role));
         } catch (Throwable $exception) {
             Log::error('Failed to update timetable.', [
                 'user_id' => $request->user()?->id,
@@ -334,6 +367,25 @@ class AdminTimetableController extends Controller
         return $payload;
     }
 
+    private function resolveStoragePath(?string $imagePath): ?string
+    {
+        if (!$imagePath) {
+            return null;
+        }
+
+        if (preg_match('/^https?:\/\//i', $imagePath)) {
+            return null;
+        }
+
+        $path = ltrim($imagePath, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        return $path ?: null;
+    }
+
     /**
      * @param array<string, mixed> $validated
      */
@@ -347,13 +399,20 @@ class AdminTimetableController extends Controller
             ->values();
     }
 
-    private function transformTimetable(Timetable $timetable): array
+    private function transformTimetable(Timetable $timetable, ?string $role = null): array
     {
+        $downloadPrefix = match ($role) {
+            'professeur' => 'professeur',
+            'stagiaire' => 'stagiaire',
+            default => 'admin',
+        };
+
         return [
             'id' => $timetable->id,
             'title' => $timetable->title,
             'image_path' => $timetable->image_path,
             'image_url' => $timetable->image_url,
+            'download_url' => "/{$downloadPrefix}/timetables/{$timetable->id}/download",
             'groupe_id' => $timetable->groupe_id,
             'groupe' => $timetable->groupe ? [
                 'id' => $timetable->groupe->id,

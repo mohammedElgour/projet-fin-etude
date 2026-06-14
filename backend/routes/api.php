@@ -56,6 +56,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/timetables', [AdminTimetableController::class, 'index']);
         Route::post('/timetables', [AdminTimetableController::class, 'store']);
         Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
+        Route::get('/timetables/{timetable}/download', [AdminTimetableController::class, 'download']);
         Route::post('/timetables/{timetable}', [AdminTimetableController::class, 'update']);
         Route::delete('/timetables/{timetable}', [AdminTimetableController::class, 'destroy']);
 
@@ -89,6 +90,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/schedule', [StudentPortalController::class, 'schedule']);
         Route::get('/timetables', [AdminTimetableController::class, 'index']);
         Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
+        Route::get('/timetables/{timetable}/download', [AdminTimetableController::class, 'download']);
         Route::get('/announcements', [StudentPortalController::class, 'announcements']);
         Route::get('/ai-recommendation', [StudentPortalController::class, 'aiRecommendation']);
     });
@@ -112,5 +114,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/schedule', [ProfScheduleController::class, 'index']);
         Route::get('/timetables', [AdminTimetableController::class, 'index']);
         Route::get('/timetables/{timetable}', [AdminTimetableController::class, 'show']);
+        Route::get('/timetables/{timetable}/download', [AdminTimetableController::class, 'download']);
     });
 });

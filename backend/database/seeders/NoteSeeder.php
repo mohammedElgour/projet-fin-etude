@@ -119,7 +119,7 @@ class NoteSeeder extends Seeder
                             'cc2' => $noteData['cc2'],
                             'cc3' => $noteData['cc3'],
                             'efm' => $noteData['efm'],
-                            'note' => round((($noteData['cc1'] + $noteData['cc2'] + $noteData['cc3'] + ($noteData['efm'] * 2)) / 5), 2),
+                            'note' => round((($noteData['cc1'] + $noteData['cc2'] + $noteData['cc3'] + $noteData['efm']) / 5), 2),
                             'status' => $noteStatus,
                             'feedback' => $entry['status'] === NoteSubmission::STATUS_REJECTED ? ($entry['feedback'] ?? 'Veuillez revoir cette note.') : null,
                             'reviewed_at' => $entry['status'] === NoteSubmission::STATUS_PENDING ? null : now(),

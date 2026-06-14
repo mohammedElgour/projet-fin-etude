@@ -329,18 +329,22 @@ const NotesValidationWorkspace = () => {
           { name: 'cc1', label: 'Controle 1', type: 'number', min: 0, max: 20, step: 0.25 },
           { name: 'cc2', label: 'Controle 2', type: 'number', min: 0, max: 20, step: 0.25 },
           { name: 'cc3', label: 'Controle 3', type: 'number', min: 0, max: 20, step: 0.25 },
-          { name: 'efm', label: 'EFM', type: 'number', min: 0, max: 20, step: 0.25 },
+          { name: 'efm', label: 'EFM', type: 'number', min: 0, max: 40, step: 0.25 },
           { name: 'status', label: 'Statut', type: 'select', options: STATUS_OPTIONS },
           { name: 'feedback', label: 'Commentaire directeur', type: 'textarea', fullWidth: true },
         ]}
         validate={(values) => {
           const errors = {};
 
-          ['cc1', 'cc2', 'cc3', 'efm'].forEach((field) => {
+          ['cc1', 'cc2', 'cc3'].forEach((field) => {
             if (values[field] !== '' && (Number(values[field]) < 0 || Number(values[field]) > 20)) {
               errors[field] = 'La note doit etre comprise entre 0 et 20.';
             }
           });
+
+          if (values.efm !== '' && (Number(values.efm) < 0 || Number(values.efm) > 40)) {
+            errors.efm = 'La note doit etre comprise entre 0 et 40.';
+          }
 
           return errors;
         }}

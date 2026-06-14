@@ -99,6 +99,10 @@ const ManagementTable = ({
   }, [searchTerm, rowFilter]);
 
   useEffect(() => {
+    setPage(1);
+  }, [data]);
+
+  useEffect(() => {
     if (page > totalPages) {
       setPage(totalPages);
     }

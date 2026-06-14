@@ -3,6 +3,7 @@ import ActionButton from '../components/admin/ActionButton';
 import DeleteConfirmModal from '../components/admin/DeleteConfirmModal';
 import ManagementTable from '../components/admin/ManagementTable';
 import TimetableGrid from '../components/timetable/TimetableGrid';
+import { downloadTimetableFile } from '../lib/downloadTimetableFile';
 import { ChevronDown, Search } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAdminResourceList } from '../hooks/useAdminData';
@@ -157,6 +158,7 @@ const AdminTimetablePage = () => {
           ? new Date(timetable.created_at).toLocaleDateString('fr-FR')
           : '-',
         imageUrl: timetable.image_url,
+        downloadUrl: timetable.download_url,
         groups: Array.isArray(timetable.groupes) && timetable.groupes.length
           ? timetable.groupes
           : timetable.groupe
@@ -173,6 +175,7 @@ const AdminTimetablePage = () => {
         id: timetable.id,
         title: timetable.title || 'Emploi du temps',
         imageUrl: timetable.image_url,
+        downloadUrl: timetable.download_url,
         groupe: buildAudienceLabel(timetable),
         filiere: timetable.groupe?.filiere?.nom || timetable.groupe?.filier?.nom || '-',
         audienceType: timetable.audience_type,
@@ -320,6 +323,17 @@ const AdminTimetablePage = () => {
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
+    }
+  };
+
+  const handleDownload = async (downloadUrl, fallbackFilename) => {
+    const downloaded = await downloadTimetableFile({
+      downloadUrl,
+      fallbackFilename,
+    });
+
+    if (!downloaded) {
+      toast.error('Failed to download timetable.', 'Unable to connect to the server.');
     }
   };
 
@@ -523,14 +537,14 @@ const AdminTimetablePage = () => {
               key: 'download',
               header: 'Document',
               render: (row) => (
-                row.imageUrl ? (
-                  <a
-                    href={row.imageUrl}
-                    download
+                row.downloadUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(row.downloadUrl, row.title || 'emploi-du-temps')}
                     className="text-sm font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
                   >
                     Telecharger
-                  </a>
+                  </button>
                 ) : (
                   <span className="text-sm text-slate-400 dark:text-slate-500">Image indisponible</span>
                 )

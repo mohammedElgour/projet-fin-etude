@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { professeurApi } from '../services/api';
 import { normalizeCollectionResponse } from '../lib/normalizeCollectionResponse';
 
@@ -23,15 +23,25 @@ export const useProfesseurData = () => {
   const [selectedModule, setSelectedModule] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const catalogRef = useRef(catalog);
 
-  const groupId = selectedGroup || bootstrapGroupId;
+  useEffect(() => {
+    catalogRef.current = catalog;
+  }, [catalog]);
 
   const loadData = useCallback(async () => {
+    const currentGroupId = selectedGroup || bootstrapGroupId;
+    const currentCatalog = catalogRef.current;
+
+    if (!currentGroupId && currentCatalog.groupes.length > 0) {
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      if (!groupId) {
+      if (!currentGroupId) {
         const catalogRes = await professeurApi.catalog();
         const nextCatalog = normalizeCatalog(catalogRes);
         const fallbackGroupId = nextCatalog.groupes[0]?.id;
@@ -50,27 +60,19 @@ export const useProfesseurData = () => {
         return;
       }
 
-      // eslint-disable-next-line no-console
-      console.log('GROUP ID:', groupId);
-
       const [catalogRes, studentsRes, scheduleRes, timetablesRes] = await Promise.all([
-        professeurApi.catalog(),
+        currentCatalog.groupes.length > 0 ? Promise.resolve(currentCatalog) : professeurApi.catalog(),
         professeurApi.stagiaires({
-          groupe_id: groupId,
+          groupe_id: currentGroupId,
           ...(selectedModule ? { module_id: selectedModule } : {}),
         }),
-        professeurApi.schedule({ groupe_id: groupId }),
+        professeurApi.schedule({ groupe_id: currentGroupId }),
         professeurApi.timetables(),
       ]);
 
-      // eslint-disable-next-line no-console
-      console.log('STUDENTS DATA:', studentsRes);
-      // eslint-disable-next-line no-console
-      console.log('SCHEDULE DATA:', scheduleRes);
-
-      const nextCatalog = normalizeCatalog(catalogRes);
+      const nextCatalog = currentCatalog.groupes.length > 0 ? currentCatalog : normalizeCatalog(catalogRes);
       const nextStudents = normalizeCollectionResponse(studentsRes).filter(
-        (student) => String(student?.groupe?.id || '') === String(groupId)
+        (student) => String(student?.groupe?.id || '') === String(currentGroupId)
       );
       const nextSchedule = normalizeCollectionResponse(scheduleRes);
 
@@ -95,11 +97,11 @@ export const useProfesseurData = () => {
     } finally {
       setLoading(false);
     }
-  }, [bootstrapGroupId, groupId, selectedGroup, selectedModule]);
+  }, [bootstrapGroupId, selectedGroup, selectedModule]);
 
   useEffect(() => {
     loadData();
-  }, [groupId, loadData]);
+  }, [loadData]);
 
   const rows = useMemo(
     () =>
@@ -170,6 +172,7 @@ export const useProfesseurData = () => {
         id: timetable.id,
         title: timetable.title || 'Emploi du temps',
         imageUrl: timetable.image_url,
+        downloadUrl: timetable.download_url,
         imagePath: timetable.image_path,
         groupe: timetable.groupe?.nom || '-',
         filiere: timetable.groupe?.filiere?.nom || timetable.groupe?.filier?.nom || '-',
@@ -196,7 +199,7 @@ export const useProfesseurData = () => {
     setSelectedGroup,
     selectedModule,
     setSelectedModule,
-    activeGroupId: groupId,
+    activeGroupId: selectedGroup || bootstrapGroupId,
     activeSubmission,
     loading,
     error,

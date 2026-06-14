@@ -12,6 +12,7 @@ use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ProfessorScopeTest extends TestCase
@@ -252,5 +253,48 @@ class ProfessorScopeTest extends TestCase
         $this->assertSame($professorTimetable->id, $emploiDuTemps[0]['id']);
         $this->assertSame('EDT Professeur DD', $emploiDuTemps[0]['title']);
         $this->assertNotSame($otherTimetable->id, $emploiDuTemps[0]['id']);
+    }
+
+    public function test_professor_can_download_only_his_assigned_timetable(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        Storage::fake('public');
+
+        $professorUser = User::where('email', 'prof@ista.test')->firstOrFail();
+        $otherProfessorUser = User::where('email', 'prof2@ista.test')->firstOrFail();
+
+        $professor = $professorUser->professeur;
+        $otherProfessor = $otherProfessorUser->professeur;
+
+        Storage::disk('public')->put('timetables/professeur-dd.pdf', 'pdf-bytes');
+        Storage::disk('public')->put('timetables/professeur-id.pdf', 'pdf-bytes');
+
+        $professorTimetable = Timetable::create([
+            'title' => 'EDT Professeur DD',
+            'image_path' => 'timetables/professeur-dd.pdf',
+            'groupe_id' => $professor->groupes()->firstOrFail()->id,
+            'created_by' => $professorUser->id,
+        ]);
+        $professorTimetable->professeurs()->sync([$professor->id]);
+
+        $otherTimetable = Timetable::create([
+            'title' => 'EDT Professeur ID',
+            'image_path' => 'timetables/professeur-id.pdf',
+            'groupe_id' => $otherProfessor->groupes()->firstOrFail()->id,
+            'created_by' => $otherProfessorUser->id,
+        ]);
+        $otherTimetable->professeurs()->sync([$otherProfessor->id]);
+
+        Sanctum::actingAs($professorUser);
+
+        $response = $this->get("/api/professeur/timetables/{$professorTimetable->id}/download");
+
+        $response->assertOk();
+        $this->assertStringContainsString('attachment', $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('professeur-dd.pdf', $response->headers->get('content-disposition'));
+
+        $this->get("/api/professeur/timetables/{$otherTimetable->id}/download")
+            ->assertForbidden();
     }
 }

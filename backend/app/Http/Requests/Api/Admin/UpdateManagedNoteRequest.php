@@ -18,7 +18,7 @@ class UpdateManagedNoteRequest extends FormRequest
             'cc1' => ['nullable', 'numeric', 'min:0', 'max:20'],
             'cc2' => ['nullable', 'numeric', 'min:0', 'max:20'],
             'cc3' => ['nullable', 'numeric', 'min:0', 'max:20'],
-            'efm' => ['nullable', 'numeric', 'min:0', 'max:20'],
+            'efm' => ['nullable', 'numeric', 'min:0', 'max:40'],
             'status' => ['sometimes', 'required', Rule::in(['draft', 'submitted', 'validated', 'rejected'])],
             'feedback' => ['nullable', 'string', 'max:1000'],
         ];

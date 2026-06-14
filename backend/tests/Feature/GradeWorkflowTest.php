@@ -40,10 +40,10 @@ class GradeWorkflowTest extends TestCase
             'notes' => $students->values()->map(function (Stagiaire $student, int $index) {
                 return [
                     'stagiaire_id' => $student->id,
-                    'controle_1' => 12 + $index,
-                    'controle_2' => 13 + $index,
-                    'controle_3' => 14 + $index,
-                    'efm' => 15 + $index,
+                    'controle_1' => $index === 0 ? 20 : 10,
+                    'controle_2' => $index === 0 ? 20 : 10,
+                    'controle_3' => $index === 0 ? 20 : 10,
+                    'efm' => $index === 0 ? 40 : 20,
                 ];
             })->all(),
         ])
@@ -116,9 +116,69 @@ class GradeWorkflowTest extends TestCase
             collect($studentNotes)->contains(
                 fn ($note) => (int) $note['module_id'] === (int) $module->id
                     && $note['validation_status'] === Note::STATUS_VALIDATED
-                    && (float) $note['note'] === 13.8
+                    && (float) $note['note'] === 20.0
             )
         );
+    }
+
+    public function test_professor_and_admin_note_validation_enforces_the_new_score_limits(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $professorUser = User::where('email', 'prof@ista.test')->firstOrFail();
+        $groupe = $professorUser->professeur->groupes()->where('nom', 'DD101')->firstOrFail();
+        $module = $professorUser->professeur->modules()
+            ->where('code', 'M106')
+            ->where('filiere_id', $groupe->filiere_id)
+            ->firstOrFail();
+        $student = Stagiaire::query()->where('groupe_id', $groupe->id)->firstOrFail();
+
+        Sanctum::actingAs($professorUser);
+
+        $this->postJson('/api/professeur/notes', [
+            'stagiaire_id' => $student->id,
+            'module_id' => $module->id,
+            'cc1' => 21,
+            'cc2' => 20,
+            'cc3' => 20,
+            'efm' => 41,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cc1', 'efm']);
+
+        $this->postJson('/api/professeur/notes/batch', [
+            'groupe_id' => $groupe->id,
+            'module_id' => $module->id,
+            'notes' => [[
+                'stagiaire_id' => $student->id,
+                'controle_1' => 21,
+                'controle_2' => 20,
+                'controle_3' => 20,
+                'efm' => 41,
+            ]],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['notes.0.controle_1', 'notes.0.efm']);
+
+        $validResponse = $this->postJson('/api/professeur/notes', [
+            'stagiaire_id' => $student->id,
+            'module_id' => $module->id,
+            'cc1' => 20,
+            'cc2' => 20,
+            'cc3' => 20,
+            'efm' => 40,
+        ])
+            ->assertCreated();
+
+        $noteId = $validResponse->json('note.id');
+
+        Sanctum::actingAs(User::where('email', 'admin@ista.test')->firstOrFail());
+
+        $this->patchJson("/api/admin/notes/{$noteId}", [
+            'efm' => 41,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['efm']);
     }
 
     public function test_student_timetable_endpoint_only_returns_the_authenticated_student_group_schedule(): void

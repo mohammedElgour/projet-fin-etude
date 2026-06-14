@@ -24,6 +24,30 @@ const buildTouchedState = (fieldList = []) =>
 
 const ensureObject = (value) => (value && typeof value === 'object' ? value : {});
 
+const clampNumericInput = (value, min, max) => {
+  if (value === '') {
+    return value;
+  }
+
+  const parsed = Number(value);
+
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+
+  let nextValue = parsed;
+
+  if (typeof min === 'number' && nextValue < min) {
+    nextValue = min;
+  }
+
+  if (typeof max === 'number' && nextValue > max) {
+    nextValue = max;
+  }
+
+  return String(nextValue);
+};
+
 const CrudModal = ({
   isOpen,
   mode = 'create',
@@ -322,7 +346,14 @@ const CrudModal = ({
                     <input
                       type={field.type || 'text'}
                       value={formValues[field.name] ?? ''}
-                      onChange={(event) => handleChange(field.name, event.target.value)}
+                      onChange={(event) =>
+                        handleChange(
+                          field.name,
+                          field.type === 'number'
+                            ? clampNumericInput(event.target.value, field.min, field.max)
+                            : event.target.value
+                        )
+                      }
                       onBlur={() => handleBlur(field.name)}
                       className={`${baseInputClassName} ${inputStateClassName}`}
                       required={required}

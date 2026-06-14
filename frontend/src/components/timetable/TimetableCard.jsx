@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ActionButton from '../admin/ActionButton';
+import { downloadTimetableFile } from '../../lib/downloadTimetableFile';
 
 const formatDate = (value) => {
   if (!value) {
@@ -33,6 +34,14 @@ const TimetableCard = ({ item, showAudience = false }) => {
         ? `${item.groupe}${item.filiere && item.filiere !== '-' ? ` - ${item.filiere}` : ''}`
         : 'Groupe';
   const canOpenImage = Boolean(item.imageUrl) && !imageFailed;
+  const canDownload = Boolean(item.downloadUrl);
+
+  const handleDownload = async () => {
+    await downloadTimetableFile({
+      downloadUrl: item.downloadUrl,
+      fallbackFilename: item.title || 'emploi-du-temps',
+    });
+  };
 
   return (
     <article className="overflow-hidden rounded-[28px] border border-white/70 bg-white/90 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/75">
@@ -78,12 +87,11 @@ const TimetableCard = ({ item, showAudience = false }) => {
             Ouvrir
           </ActionButton>
           <ActionButton
-            as={canOpenImage ? 'a' : 'span'}
-            href={canOpenImage ? item.imageUrl : undefined}
-            download={canOpenImage || undefined}
+            type="button"
+            onClick={handleDownload}
             variant="primary"
             className="w-full sm:w-auto"
-            disabled={!canOpenImage}
+            disabled={!canDownload}
           >
             Telecharger
           </ActionButton>

@@ -26,17 +26,12 @@ class FiliereController extends Controller
 
             $filieres = Filier::query()
                 ->withCount(['modules', 'groupes'])
+                ->orderByDesc('id')
                 ->get()
                 ->map(function (Filier $filiere) {
                     $filiere->nom = FiliereNameNormalizer::canonicalize($filiere->nom);
 
                     return $filiere;
-                })
-                ->sortBy(function (Filier $filiere) {
-                    return [
-                        FiliereNameNormalizer::key($filiere->nom),
-                        $filiere->id,
-                    ];
                 })
                 ->unique(function (Filier $filiere) {
                     return FiliereNameNormalizer::key($filiere->nom);

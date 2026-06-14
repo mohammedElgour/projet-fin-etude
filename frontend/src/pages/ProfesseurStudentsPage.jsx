@@ -6,6 +6,12 @@ import { useToast } from '../context/ToastContext';
 import { professeurApi } from '../services/api';
 
 const NOTE_FIELDS = ['controle_1', 'controle_2', 'controle_3', 'efm'];
+const NOTE_LIMITS = {
+  controle_1: 20,
+  controle_2: 20,
+  controle_3: 20,
+  efm: 40,
+};
 
 const isBlankValue = (value) => value === '' || value === null || value === undefined;
 
@@ -18,13 +24,15 @@ const parseNoteValue = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const isFieldInvalid = (value) => {
+const getFieldMax = (field) => NOTE_LIMITS[field] ?? 20;
+
+const isFieldInvalid = (field, value) => {
   if (isBlankValue(value)) {
     return false;
   }
 
   const parsed = Number(value);
-  return Number.isNaN(parsed) || parsed < 0 || parsed > 20;
+  return Number.isNaN(parsed) || parsed < 0 || parsed > getFieldMax(field);
 };
 
 const computeMoyenne = (note) => {
@@ -36,7 +44,7 @@ const computeMoyenne = (note) => {
   }
 
   const controlsAverage = (values[0] + values[1] + values[2]) / 3;
-  return (controlsAverage * 0.4) + (values[3] * 0.6);
+  return (controlsAverage * 0.4) + ((values[3] / 2) * 0.6);
 };
 
 const getGradeStatus = (note) => {
@@ -126,24 +134,31 @@ const ProfesseurStudentsPage = () => {
   const isSubmissionLocked = activeSubmissionStatus === 'pending' || activeSubmissionStatus === 'approved';
 
   const handleNoteChange = (stagiaireId, field, value) => {
+    const max = getFieldMax(field);
+    const isBlank = isBlankValue(value);
+    const parsedValue = Number(value);
+    const isValidValue = isBlank || (!Number.isNaN(parsedValue) && parsedValue >= 0 && parsedValue <= max);
+
     setSaveMessage('');
 
-    setNotes((previousNotes) =>
-      previousNotes.map((entry) =>
-        entry.stagiaire_id === stagiaireId
-          ? {
-              ...entry,
-              [field]: value,
-            }
-          : entry
-      )
-    );
+    if (isValidValue) {
+      setNotes((previousNotes) =>
+        previousNotes.map((entry) =>
+          entry.stagiaire_id === stagiaireId
+            ? {
+                ...entry,
+                [field]: value,
+              }
+            : entry
+        )
+      );
+    }
 
     setValidationErrors((previousErrors) => {
       const nextErrors = { ...previousErrors };
       const errorKey = `${stagiaireId}-${field}`;
 
-      if (isFieldInvalid(value)) {
+      if (isFieldInvalid(field, value)) {
         nextErrors[errorKey] = true;
       } else {
         delete nextErrors[errorKey];
@@ -293,7 +308,7 @@ const ProfesseurStudentsPage = () => {
                 type="number"
                 inputMode="decimal"
                 min="0"
-                max="20"
+                max="40"
                 step="0.25"
                 value={row.efm}
                 onChange={(event) => handleNoteChange(row.id, 'efm', event.target.value)}
@@ -449,7 +464,7 @@ const ProfesseurStudentsPage = () => {
     setValidationErrors(nextValidationErrors);
 
     if (Object.keys(nextValidationErrors).length > 0) {
-      const message = 'Corrigez les notes invalides. Chaque note doit etre comprise entre 0 et 20.';
+      const message = 'Corrigez les notes invalides. Les controles doivent etre entre 0 et 20 et l EFM entre 0 et 40.';
       setError(message);
       notifyError('Notes invalides', message);
       return;
@@ -482,7 +497,7 @@ const ProfesseurStudentsPage = () => {
     setValidationErrors(nextValidationErrors);
 
     if (Object.keys(nextValidationErrors).length > 0) {
-      const message = 'Corrigez les notes invalides avant la soumission.';
+      const message = 'Corrigez les notes invalides avant la soumission. Les controles doivent etre entre 0 et 20 et l EFM entre 0 et 40.';
       setError(message);
       notifyError('Notes invalides', message);
       return;

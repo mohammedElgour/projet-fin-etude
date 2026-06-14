@@ -32,8 +32,8 @@ class NoteFactory extends Factory
         $cc1 = $this->faker->randomFloat(2, 0, 20);
         $cc2 = $this->faker->randomFloat(2, 0, 20);
         $cc3 = $this->faker->randomFloat(2, 0, 20);
-        $efm = $this->faker->randomFloat(2, 0, 20);
-        $average = round((($cc1 + $cc2 + $cc3 + ($efm * 2)) / 5), 2);
+        $efm = $this->faker->randomFloat(2, 0, 40);
+        $average = round((($cc1 + $cc2 + $cc3 + $efm) / 5), 2);
 
         return Note::prepareWorkflowAttributes([
             'submission_id' => function (array $attributes) {
