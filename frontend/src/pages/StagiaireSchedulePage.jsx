@@ -26,6 +26,7 @@ const StagiaireSchedulePage = () => {
   const [zoom, setZoom] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState('');
   const studentFromUser = useMemo(() => getStudentInfo(user), [user]);
   const timetable = emploiDuTemps?.timetable || null;
   const student = {
@@ -40,8 +41,12 @@ const StagiaireSchedulePage = () => {
     }
 
     setPdfLoading(true);
+    setPdfError('');
     try {
       await downloadTimetableImagePdf({ student, timetable });
+    } catch (error) {
+      console.error(error);
+      setPdfError(error?.message || 'Impossible de generer le PDF de l emploi du temps.');
     } finally {
       setPdfLoading(false);
     }
@@ -56,6 +61,12 @@ const StagiaireSchedulePage = () => {
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
           {error}
+        </div>
+      ) : null}
+
+      {pdfError ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          {pdfError}
         </div>
       ) : null}
 

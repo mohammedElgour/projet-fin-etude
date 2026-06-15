@@ -63,9 +63,9 @@ class Timetable extends Model
         $path = ltrim($this->image_path, '/');
 
         if (str_starts_with($path, 'storage/')) {
-            return asset($path);
+            $path = substr($path, strlen('storage/'));
         }
 
-        return asset('storage/' . $path);
+        return url('timetable-images/' . $path);
     }
 }

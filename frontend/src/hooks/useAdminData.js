@@ -12,7 +12,7 @@ const getRequestErrorMessage = (err, fallbackError) => {
 
 export const useAdminDashboardData = () => {
   const [stats, setStats] = useState(null);
-  const [noteSubmissions, setNoteSubmissions] = useState([]);
+  const [evaluationQueue, setEvaluationQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const loadingRef = useRef(false);
@@ -29,7 +29,7 @@ export const useAdminDashboardData = () => {
     try {
       const [statsResult, submissionsResult] = await Promise.allSettled([
         adminApi.dashboardStats(),
-        adminApi.noteSubmissions(),
+        adminApi.evaluationQueue(),
       ]);
 
       const nextErrors = [];
@@ -48,10 +48,10 @@ export const useAdminDashboardData = () => {
         const normalizedSubmissions = Array.isArray(submissionsRes)
           ? submissionsRes
           : submissionsRes?.data || submissionsRes?.results || [];
-        setNoteSubmissions(normalizedSubmissions);
+        setEvaluationQueue(normalizedSubmissions);
       } else {
-        setNoteSubmissions([]);
-        nextErrors.push(getRequestErrorMessage(submissionsResult.reason, 'Impossible de charger les soumissions de notes.'));
+        setEvaluationQueue([]);
+        nextErrors.push(getRequestErrorMessage(submissionsResult.reason, 'Impossible de charger la file de validation.'));
       }
 
       if (nextErrors.length) {
@@ -81,8 +81,8 @@ export const useAdminDashboardData = () => {
 
   return {
     stats,
-    noteSubmissions,
-    pendingNotes: noteSubmissions,
+    evaluationQueue,
+    pendingNotes: evaluationQueue,
     loading,
     error,
     reload: loadData,
@@ -105,9 +105,9 @@ export const useAdminResourceList = (loader, fallbackError) => {
 
     try {
       const response = await loaderRef.current();
-      setItems(normalizeCollectionResponse(response));
+      setItems(normalizeCollectionResponse(response) || []);
     } catch (err) {
-      console.error('Admin resource request failed:', err);
+      console.error(err);
       setItems([]);
       setError(getRequestErrorMessage(err, fallbackError));
     } finally {

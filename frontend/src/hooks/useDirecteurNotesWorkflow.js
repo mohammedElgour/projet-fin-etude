@@ -12,12 +12,26 @@ export const useDirecteurNotesWorkflow = () => {
     total: 0,
     draft: 0,
     submitted: 0,
+    approved: 0,
     validated: 0,
     rejected: 0,
   });
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const normalizeSummary = (payload = {}) => {
+    const approved = Number(payload.approved ?? payload.validated ?? 0);
+
+    return {
+      total: Number(payload.total ?? 0),
+      draft: Number(payload.draft ?? 0),
+      submitted: Number(payload.submitted ?? 0),
+      approved,
+      validated: approved,
+      rejected: Number(payload.rejected ?? 0),
+    };
+  };
 
   const loadCatalog = useCallback(async () => {
     const [groupsResponse, modulesResponse] = await Promise.all([
@@ -43,6 +57,7 @@ export const useDirecteurNotesWorkflow = () => {
         total: 0,
         draft: 0,
         submitted: 0,
+        approved: 0,
         validated: 0,
         rejected: 0,
       });
@@ -59,20 +74,15 @@ export const useDirecteurNotesWorkflow = () => {
       });
 
       setRows(Array.isArray(response?.data) ? response.data : []);
-      setSummary(response?.summary || {
-        total: 0,
-        draft: 0,
-        submitted: 0,
-        validated: 0,
-        rejected: 0,
-      });
+      setSummary(normalizeSummary(response?.summary));
     } catch (err) {
-      console.error('Directeur workflow request failed:', err);
+      console.error(err);
       setRows([]);
       setSummary({
         total: 0,
         draft: 0,
         submitted: 0,
+        approved: 0,
         validated: 0,
         rejected: 0,
       });
@@ -92,7 +102,7 @@ export const useDirecteurNotesWorkflow = () => {
       try {
         await loadCatalog();
       } catch (err) {
-        console.error('Directeur notes catalog request failed:', err);
+        console.error(err);
         if (!cancelled) {
           setError(err?.response?.data?.message || 'Impossible de charger les groupes et modules.');
         }

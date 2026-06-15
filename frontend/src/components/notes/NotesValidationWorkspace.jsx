@@ -12,6 +12,7 @@ import { adminApi } from '../../services/api';
 const STATUS_STYLES = {
   draft: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
   submitted: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
+  approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
   validated: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
   rejected: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
 };
@@ -19,13 +20,25 @@ const STATUS_STYLES = {
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
   { value: 'submitted', label: 'Submitted' },
-  { value: 'validated', label: 'Validated' },
+  { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
 ];
 
 const safeAverage = (row) => {
   const average = Number(row.moyenne);
   return Number.isFinite(average) ? average : null;
+};
+
+const getRequestErrorMessage = (err, fallbackMessage) => {
+  const validationErrors = err?.response?.data?.errors;
+  if (validationErrors && typeof validationErrors === 'object') {
+    const flattened = Object.values(validationErrors).flat().filter(Boolean);
+    if (flattened.length > 0) {
+      return flattened.join(' ');
+    }
+  }
+
+  return err?.response?.data?.message || err?.message || fallbackMessage;
 };
 
 const NotesValidationWorkspace = () => {
@@ -114,6 +127,11 @@ const NotesValidationWorkspace = () => {
     setError('');
 
     try {
+      if (summary.submitted === 0) {
+        setError('Aucune note soumise n est disponible pour cette selection.');
+        return;
+      }
+
       const response = await adminApi.validateNotesGroup({
         groupe_id: Number(selectedGroup),
         module_id: Number(selectedModule),
@@ -123,7 +141,8 @@ const NotesValidationWorkspace = () => {
       setModalMode(null);
       await reload();
     } catch (err) {
-      const message = err?.response?.data?.message || 'Impossible de valider les notes.';
+      console.error(err);
+      const message = getRequestErrorMessage(err, 'Impossible de valider les notes.');
       setError(message);
       notifyError('Validation impossible', message);
     } finally {
@@ -146,7 +165,8 @@ const NotesValidationWorkspace = () => {
       setModalMode(null);
       await reload();
     } catch (err) {
-      const message = err?.response?.data?.message || 'Impossible de rejeter les notes.';
+      console.error(err);
+      const message = getRequestErrorMessage(err, 'Impossible de rejeter les notes.');
       setError(message);
       notifyError('Rejet impossible', message);
     } finally {
@@ -178,7 +198,8 @@ const NotesValidationWorkspace = () => {
       setActiveRow(null);
       await reload();
     } catch (err) {
-      const message = err?.response?.data?.message || 'Impossible de mettre a jour la note.';
+      console.error(err);
+      const message = getRequestErrorMessage(err, 'Impossible de mettre a jour la note.');
       setError(message);
       notifyError('Mise a jour impossible', message);
     } finally {
@@ -189,7 +210,7 @@ const NotesValidationWorkspace = () => {
   const summaryCards = [
     { key: 'draft', label: 'Draft', value: summary.draft, icon: FileWarning, accent: 'from-slate-500 to-slate-400' },
     { key: 'submitted', label: 'Submitted', value: summary.submitted, icon: Send, accent: 'from-sky-500 to-cyan-500' },
-    { key: 'validated', label: 'Validated', value: summary.validated, icon: CheckCircle2, accent: 'from-emerald-500 to-teal-500' },
+    { key: 'approved', label: 'Approved', value: summary.approved ?? summary.validated, icon: CheckCircle2, accent: 'from-emerald-500 to-teal-500' },
     { key: 'rejected', label: 'Rejected', value: summary.rejected, icon: XCircle, accent: 'from-rose-500 to-orange-500' },
   ];
 

@@ -10,6 +10,7 @@ use App\Http\Resources\Professeur\ProfessorNoteResource;
 use App\Models\Note;
 use App\Models\NoteSubmission;
 use App\Models\Stagiaire;
+use App\Services\GradeWorkflowService;
 use App\Services\NotificationDeliveryService;
 use App\Services\StagiaireResultEmailService;
 use Illuminate\Http\JsonResponse;
@@ -23,7 +24,8 @@ class NoteValidationController extends Controller
 {
     public function __construct(
         private NotificationDeliveryService $notifications,
-        private StagiaireResultEmailService $resultsEmails
+        private StagiaireResultEmailService $resultsEmails,
+        private GradeWorkflowService $gradeWorkflow
     ) {
     }
 
@@ -45,6 +47,293 @@ class NoteValidationController extends Controller
         ) / 5), 2);
     }
 
+    protected function evaluationDefinitions(): array
+    {
+        return [
+            'controle_1' => ['grade_field' => 'cc1', 'label' => 'Contrôle 1'],
+            'controle_2' => ['grade_field' => 'cc2', 'label' => 'Contrôle 2'],
+            'controle_3' => ['grade_field' => 'cc3', 'label' => 'Contrôle 3'],
+            'efm' => ['grade_field' => 'efm', 'label' => 'EFM'],
+        ];
+    }
+
+    protected function evaluationLabel(string $evaluationType): string
+    {
+        return $this->evaluationDefinitions()[$evaluationType]['label'] ?? ucfirst(str_replace('_', ' ', $evaluationType));
+    }
+
+    protected function evaluationGradeField(string $evaluationType): ?string
+    {
+        return $this->evaluationDefinitions()[$evaluationType]['grade_field'] ?? null;
+    }
+
+    protected function evaluationStatusField(string $evaluationType): ?string
+    {
+        $gradeField = $this->evaluationGradeField($evaluationType);
+
+        return $gradeField ? Note::COMPONENT_STATUS_FIELDS[$gradeField] ?? null : null;
+    }
+
+    protected function captureNoteBeforeState(Note $note): array
+    {
+        return $note->exists ? $note->workflowSnapshot() : [];
+    }
+
+    protected function logNoteWorkflowChange(Note $note, string $action, array $before, array $after, ?int $createdBy = null): void
+    {
+        $this->gradeWorkflow->recordHistory($note, $action, $before, $after, $createdBy);
+        $this->gradeWorkflow->logAction(sprintf('Admin grade %s', $action), [
+            'note_id' => $note->id,
+            'submission_id' => $note->submission_id,
+            'stagiaire_id' => $note->stagiaire_id,
+            'module_id' => $note->module_id,
+            'created_by' => $createdBy,
+        ]);
+    }
+
+    protected function normalizeEvaluationType(?string $evaluationType): ?string
+    {
+        $evaluationType = $evaluationType ? strtolower(trim($evaluationType)) : null;
+
+        return $evaluationType && isset($this->evaluationDefinitions()[$evaluationType]) ? $evaluationType : null;
+    }
+
+    protected function evaluationTypeLabel(?string $evaluationType): string
+    {
+        $evaluationType = $this->normalizeEvaluationType($evaluationType);
+
+        return $evaluationType ? $this->evaluationLabel($evaluationType) : 'Evaluation';
+    }
+
+    protected function buildEvaluationHistory(Note $note, string $evaluationType): array
+    {
+        $statusField = $this->evaluationStatusField($evaluationType);
+        $status = $statusField ? Note::normalizeWorkflowStatus($note->{$statusField} ?? null) : Note::STATUS_DRAFT;
+
+        return [
+            [
+                'label' => 'Soumission',
+                'status' => $status === Note::STATUS_DRAFT ? 'draft' : 'submitted',
+                'date' => optional($note->updated_at)?->toISOString(),
+                'message' => $status === Note::STATUS_DRAFT
+                    ? 'Aucune soumission active pour cette evaluation.'
+                    : 'L evaluation a ete envoyee pour validation.',
+            ],
+            [
+                'label' => 'Decision admin',
+                'status' => $status,
+                'date' => optional($note->reviewed_at)?->toISOString(),
+                'message' => match ($status) {
+                    Note::STATUS_APPROVED => 'L evaluation a ete approuvee.',
+                    Note::STATUS_REJECTED => 'L evaluation a ete rejetee.',
+                    default => 'En attente de decision.',
+                },
+            ],
+        ];
+    }
+
+    protected function buildEvaluationRow(Note $note, string $evaluationType): array
+    {
+        $gradeField = $this->evaluationGradeField($evaluationType);
+        $statusField = $this->evaluationStatusField($evaluationType);
+
+        if (!$gradeField || !$statusField) {
+            return [];
+        }
+
+        $status = Note::normalizeWorkflowStatus($note->{$statusField} ?? null);
+
+        return [
+            'id' => sprintf('%s:%s', $note->id, $evaluationType),
+            'note_id' => $note->id,
+            'submission_id' => $note->submission_id,
+            'stagiaire_id' => $note->stagiaire_id,
+            'module_id' => $note->module_id,
+            'evaluation_type' => $evaluationType,
+            'evaluation_label' => $this->evaluationLabel($evaluationType),
+            'grade_field' => $gradeField,
+            'grade_value' => $note->{$gradeField} !== null ? (float) $note->{$gradeField} : null,
+            'status' => $status,
+            'submission_date' => optional($note->updated_at)?->toISOString(),
+            'feedback' => $status === Note::STATUS_REJECTED ? $note->feedback : null,
+            'student' => [
+                'id' => $note->stagiaire?->id,
+                'name' => $note->stagiaire?->user?->name ?: 'Stagiaire',
+                'email' => $note->stagiaire?->user?->email,
+            ],
+            'groupe' => [
+                'id' => $note->stagiaire?->groupe?->id,
+                'nom' => $note->stagiaire?->groupe?->nom,
+                'filiere' => $note->stagiaire?->groupe?->filiere ? [
+                    'id' => $note->stagiaire->groupe->filiere->id,
+                    'nom' => $note->stagiaire->groupe->filiere->nom,
+                ] : null,
+            ],
+            'module' => [
+                'id' => $note->module?->id,
+                'nom' => $note->module?->nom,
+                'code' => $note->module?->code,
+            ],
+            'professor' => [
+                'id' => $note->submission?->teacher?->id,
+                'name' => $note->submission?->teacher?->user?->name ?: $note->submission?->teacher?->name,
+                'email' => $note->submission?->teacher?->user?->email,
+            ],
+            'history' => $this->buildEvaluationHistory($note, $evaluationType),
+        ];
+    }
+
+    protected function buildLegacyEvaluationRow(Note $note): array
+    {
+        return [
+            'id' => (string) $note->id,
+            'note_id' => $note->id,
+            'submission_id' => $note->submission_id,
+            'stagiaire_id' => $note->stagiaire_id,
+            'module_id' => $note->module_id,
+            'evaluation_type' => 'legacy',
+            'evaluation_label' => 'Evaluation',
+            'grade_field' => 'note',
+            'grade_value' => $note->note !== null ? (float) $note->note : null,
+            'status' => $note->workflowStatus(),
+            'submission_date' => optional($note->updated_at)?->toISOString(),
+            'feedback' => $note->feedback,
+            'student' => [
+                'id' => $note->stagiaire?->id,
+                'name' => $note->stagiaire?->user?->name ?: 'Stagiaire',
+                'email' => $note->stagiaire?->user?->email,
+            ],
+            'groupe' => [
+                'id' => $note->stagiaire?->groupe?->id,
+                'nom' => $note->stagiaire?->groupe?->nom,
+                'filiere' => $note->stagiaire?->groupe?->filiere ? [
+                    'id' => $note->stagiaire->groupe->filiere->id,
+                    'nom' => $note->stagiaire->groupe->filiere->nom,
+                ] : null,
+            ],
+            'module' => [
+                'id' => $note->module?->id,
+                'nom' => $note->module?->nom,
+                'code' => $note->module?->code,
+            ],
+            'professor' => [
+                'id' => $note->submission?->teacher?->id,
+                'name' => $note->submission?->teacher?->user?->name ?: $note->submission?->teacher?->name,
+                'email' => $note->submission?->teacher?->user?->email,
+            ],
+            'history' => [
+                [
+                    'label' => 'Soumission',
+                    'status' => $note->workflowStatus(),
+                    'date' => optional($note->updated_at)?->toISOString(),
+                    'message' => 'Soumission legacy du module en attente de validation.',
+                ],
+                [
+                    'label' => 'Decision admin',
+                    'status' => $note->workflowStatus(),
+                    'date' => optional($note->reviewed_at)?->toISOString(),
+                    'message' => $note->workflowStatus() === Note::STATUS_REJECTED
+                        ? 'La note a ete rejetee.'
+                        : ($note->workflowStatus() === Note::STATUS_APPROVED ? 'La note a ete approuvee.' : 'En attente de decision.'),
+                ],
+            ],
+        ];
+    }
+
+    protected function setEvaluationState(Note $note, string $evaluationType, string $status, ?string $feedback = null): Note
+    {
+        $statusField = $this->evaluationStatusField($evaluationType);
+        $gradeField = $this->evaluationGradeField($evaluationType);
+
+        if (!$statusField || !$gradeField) {
+            return $note;
+        }
+
+        $attributes = [
+            'submission_id' => $note->submission_id,
+            'stagiaire_id' => $note->stagiaire_id,
+            'module_id' => $note->module_id,
+            'cc1' => $note->cc1,
+            'cc2' => $note->cc2,
+            'cc3' => $note->cc3,
+            'efm' => $note->efm,
+            'controle1_status' => $note->controle1_status ?? Note::STATUS_DRAFT,
+            'controle2_status' => $note->controle2_status ?? Note::STATUS_DRAFT,
+            'controle3_status' => $note->controle3_status ?? Note::STATUS_DRAFT,
+            'efm_status' => $note->efm_status ?? Note::STATUS_DRAFT,
+            'note' => $note->note,
+            'status' => $note->workflowStatus(),
+            'validation_status' => $note->validation_status ?? $note->workflowStatus(),
+            'feedback' => $feedback,
+            'reviewed_at' => now(),
+        ];
+
+        $before = $note->workflowSnapshot();
+        $attributes[$statusField] = $status;
+
+        $prepared = Note::prepareWorkflowAttributes($attributes);
+
+        if ($prepared['status'] === Note::STATUS_APPROVED) {
+            $calculatedAverage = $this->calculateAverage($prepared);
+            if ($calculatedAverage !== null) {
+                $prepared['note'] = $calculatedAverage;
+            }
+        }
+
+        $note->fill($prepared);
+        $note->save();
+        $note->refresh();
+
+        if ($note->submission) {
+            $this->gradeWorkflow->snapshotSubmissionFromNote($note->submission, $note);
+        }
+
+        $this->logNoteWorkflowChange($note, $status, $before, $note->workflowSnapshot(), (int) request()->user()?->id);
+
+        return $note->fresh(['submission.teacher.user', 'stagiaire.user', 'stagiaire.groupe.filiere', 'module']);
+    }
+
+    protected function syncSubmissionState(Note $note): ?NoteSubmission
+    {
+        $submission = $note->submission;
+
+        if (!$submission) {
+            return null;
+        }
+
+        $submission->loadMissing(['notes']);
+        $this->gradeWorkflow->assertSubmissionHasNotes($submission);
+        $derived = $submission->deriveWorkflowState();
+
+        $submission->update([
+            'status' => in_array($derived['status'], [Note::STATUS_DRAFT, Note::STATUS_SUBMITTED], true)
+                ? NoteSubmission::STATUS_PENDING
+                : $derived['status'],
+            'submitted_at' => $derived['submitted_at'],
+            'approved_at' => $derived['approved_at'],
+            'rejected_at' => $derived['rejected_at'],
+        ]);
+
+        $submission->notes->each(fn (Note $submissionNote) => $submission->syncSnapshotFromNote($submissionNote));
+        $submission->save();
+
+        return $submission->fresh(['groupe.filiere', 'module.filiere', 'teacher.user', 'notes.stagiaire.user']);
+    }
+
+    protected function notifyEvaluationStudent(Note $note, string $message): void
+    {
+        $note->loadMissing(['stagiaire.user']);
+
+        $studentUser = $note->stagiaire?->user;
+        if ($studentUser) {
+            $this->notifications->sendToUsers(
+                [$studentUser],
+                'Validation des notes',
+                $message
+            );
+        }
+    }
+
     protected function buildWorkflowUpdate(array $grades, string $status, ?string $feedback = null): array
     {
         return Note::prepareWorkflowAttributes([
@@ -52,11 +341,51 @@ class NoteValidationController extends Controller
             'cc2' => $grades['cc2'] ?? null,
             'cc3' => $grades['cc3'] ?? null,
             'efm' => $grades['efm'] ?? null,
-            'note' => $this->calculateAverage($grades),
+            'note' => $status === Note::STATUS_APPROVED ? $this->calculateAverage($grades) : null,
             'status' => $status,
             'feedback' => $feedback,
-            'reviewed_at' => in_array($status, [Note::STATUS_VALIDATED, Note::STATUS_REJECTED], true) ? now() : null,
+            'reviewed_at' => in_array($status, [Note::STATUS_APPROVED, Note::STATUS_REJECTED], true) ? now() : null,
         ]);
+    }
+
+    protected function buildManagedNoteUpdate(Note $note, array $validated): array
+    {
+        $attributes = [
+            'cc1' => array_key_exists('cc1', $validated) ? $validated['cc1'] : $note->cc1,
+            'cc2' => array_key_exists('cc2', $validated) ? $validated['cc2'] : $note->cc2,
+            'cc3' => array_key_exists('cc3', $validated) ? $validated['cc3'] : $note->cc3,
+            'efm' => array_key_exists('efm', $validated) ? $validated['efm'] : $note->efm,
+            'controle1_status' => array_key_exists('controle1_status', $validated)
+                ? $validated['controle1_status']
+                : ($note->controle1_status ?? Note::STATUS_DRAFT),
+            'controle2_status' => array_key_exists('controle2_status', $validated)
+                ? $validated['controle2_status']
+                : ($note->controle2_status ?? Note::STATUS_DRAFT),
+            'controle3_status' => array_key_exists('controle3_status', $validated)
+                ? $validated['controle3_status']
+                : ($note->controle3_status ?? Note::STATUS_DRAFT),
+            'efm_status' => array_key_exists('efm_status', $validated)
+                ? $validated['efm_status']
+                : ($note->efm_status ?? Note::STATUS_DRAFT),
+            'status' => $validated['status'] ?? $note->workflowStatus(),
+            'feedback' => array_key_exists('feedback', $validated)
+                ? $validated['feedback']
+                : $note->feedback,
+            'reviewed_at' => in_array($validated['status'] ?? $note->workflowStatus(), [Note::STATUS_APPROVED, Note::STATUS_REJECTED], true)
+                ? now()
+                : $note->reviewed_at,
+        ];
+
+        $prepared = Note::prepareWorkflowAttributes($attributes);
+
+        if ($prepared['status'] === Note::STATUS_APPROVED) {
+            $calculatedAverage = $this->calculateAverage($prepared);
+            if ($calculatedAverage !== null) {
+                $prepared['note'] = $calculatedAverage;
+            }
+        }
+
+        return $prepared;
     }
 
     protected function emptyWorkflowResponse(): JsonResponse
@@ -68,9 +397,104 @@ class NoteValidationController extends Controller
                 'total' => 0,
                 'draft' => 0,
                 'submitted' => 0,
-                'validated' => 0,
+                'approved' => 0,
                 'rejected' => 0,
             ],
+        ]);
+    }
+
+    public function evaluationQueueIndex(Request $request): JsonResponse
+    {
+        try {
+            $query = NoteSubmission::query()
+                ->with([
+                    'groupe.filiere',
+                    'module.filiere',
+                    'teacher.user',
+                    'notes.stagiaire.user',
+                    'notes.stagiaire.groupe.filiere',
+                    'notes.module',
+                ])
+                ->withCount('notes')
+                ->whereNotNull('submitted_at');
+
+            if ($request->filled('groupe_id')) {
+                $query->where('groupe_id', $request->integer('groupe_id'));
+            }
+
+            if ($request->filled('module_id')) {
+                $query->where('module_id', $request->integer('module_id'));
+            }
+
+            if ($request->filled('evaluation_type')) {
+                $evaluationType = $this->normalizeEvaluationType((string) $request->string('evaluation_type'));
+                if ($evaluationType) {
+                    $query->where('evaluation_type', $evaluationType);
+                }
+            }
+
+            if ($request->filled('status')) {
+                $requestedStatus = Note::normalizeWorkflowStatus((string) $request->string('status'));
+
+                $query->where('status', match ($requestedStatus) {
+                    Note::STATUS_APPROVED => NoteSubmission::STATUS_APPROVED,
+                    Note::STATUS_REJECTED => NoteSubmission::STATUS_REJECTED,
+                    default => NoteSubmission::STATUS_PENDING,
+                });
+            } else {
+                $query->where('status', NoteSubmission::STATUS_PENDING);
+            }
+
+            $submissions = $query
+                ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 WHEN 'approved' THEN 2 ELSE 3 END")
+                ->orderByDesc('submitted_at')
+                ->get();
+
+            return response()->json([
+                'data' => NoteSubmissionResource::collection($submissions)->resolve($request),
+                'summary' => [
+                    'total' => $submissions->count(),
+                    'submitted' => $submissions->where('status', NoteSubmission::STATUS_PENDING)->count(),
+                    'approved' => $submissions->where('status', NoteSubmission::STATUS_APPROVED)->count(),
+                    'rejected' => $submissions->where('status', NoteSubmission::STATUS_REJECTED)->count(),
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Failed to load evaluation queue.', [
+                'user_id' => $request->user()?->id,
+                'filters' => $request->only(['groupe_id', 'module_id', 'stagiaire_id', 'evaluation_type']),
+                'exception' => $exception,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Server error',
+            ], 500);
+        }
+    }
+
+    public function showEvaluation(Request $request, Note $note): JsonResponse
+    {
+        $evaluationType = $this->normalizeEvaluationType((string) $request->query('evaluation_type', ''));
+
+        if (!$evaluationType && Note::hasComponentStatusColumns()) {
+            return response()->json([
+                'message' => 'Evaluation type missing.',
+            ], 422);
+        }
+
+        $note->load(['stagiaire.user', 'stagiaire.groupe.filiere', 'module', 'submission.teacher.user']);
+
+        $row = $evaluationType ? $this->buildEvaluationRow($note, $evaluationType) : $this->buildLegacyEvaluationRow($note);
+
+        if (!$row) {
+            return response()->json([
+                'message' => 'Evaluation not found.',
+            ], 404);
+        }
+
+        return response()->json([
+            'data' => $row,
         ]);
     }
 
@@ -86,15 +510,21 @@ class NoteValidationController extends Controller
 
         $groupeId = (int) ($payload['groupe_id'] ?? 0);
         $moduleId = (int) ($payload['module_id'] ?? 0);
+        $evaluationType = $this->normalizeEvaluationType($payload['evaluation_type'] ?? null);
 
         if (!$groupeId || !$moduleId) {
             return null;
         }
 
-        return NoteSubmission::query()
+        $query = NoteSubmission::query()
             ->where('groupe_id', $groupeId)
-            ->where('module_id', $moduleId)
-            ->first();
+            ->where('module_id', $moduleId);
+
+        if ($evaluationType) {
+            $query->where('evaluation_type', $evaluationType);
+        }
+
+        return $query->orderByDesc('submitted_at')->first();
     }
 
     protected function summarizeSubmission(NoteSubmission $submission): NoteSubmissionResource
@@ -131,10 +561,14 @@ class NoteValidationController extends Controller
                         ] : null,
                     ],
                     'cc1' => $note->cc1 !== null ? (float) $note->cc1 : null,
+                    'controle1_status' => Note::normalizeWorkflowStatus($note->controle1_status ?? null),
                     'cc2' => $note->cc2 !== null ? (float) $note->cc2 : null,
+                    'controle2_status' => Note::normalizeWorkflowStatus($note->controle2_status ?? null),
                     'cc3' => $note->cc3 !== null ? (float) $note->cc3 : null,
+                    'controle3_status' => Note::normalizeWorkflowStatus($note->controle3_status ?? null),
                     'efm' => $note->efm !== null ? (float) $note->efm : null,
-                    'moyenne' => $note->note !== null ? (float) $note->note : null,
+                    'efm_status' => Note::normalizeWorkflowStatus($note->efm_status ?? null),
+                    'moyenne' => $note->finalAverage(),
                     'status' => $note->workflowStatus(),
                     'feedback' => $note->feedback,
                     'updated_at' => optional($note->updated_at)?->toISOString(),
@@ -148,7 +582,7 @@ class NoteValidationController extends Controller
             'total' => $rows->count(),
             'draft' => $rows->where('status', Note::STATUS_DRAFT)->count(),
             'submitted' => $rows->where('status', Note::STATUS_SUBMITTED)->count(),
-            'validated' => $rows->where('status', Note::STATUS_VALIDATED)->count(),
+            'approved' => $rows->where('status', Note::STATUS_APPROVED)->count(),
             'rejected' => $rows->where('status', Note::STATUS_REJECTED)->count(),
         ];
     }
@@ -177,9 +611,57 @@ class NoteValidationController extends Controller
             ->each(fn (Stagiaire $stagiaire) => $this->resultsEmails->notifyIfReady($stagiaire));
     }
 
+    protected function buildSubmissionNoteUpdate(Note $note, NoteSubmission $submission, string $status, ?string $feedback = null): array
+    {
+        $payload = [
+            'submission_id' => $submission->id,
+            'stagiaire_id' => $note->stagiaire_id,
+            'module_id' => $note->module_id,
+            'cc1' => $note->cc1,
+            'cc2' => $note->cc2,
+            'cc3' => $note->cc3,
+            'efm' => $note->efm,
+            'controle1_status' => $note->controle1_status ?? Note::STATUS_DRAFT,
+            'controle2_status' => $note->controle2_status ?? Note::STATUS_DRAFT,
+            'controle3_status' => $note->controle3_status ?? Note::STATUS_DRAFT,
+            'efm_status' => $note->efm_status ?? Note::STATUS_DRAFT,
+            'status' => $note->workflowStatus(),
+            'validation_status' => $note->validation_status ?? $note->workflowStatus(),
+            'feedback' => $feedback,
+            'reviewed_at' => now(),
+            'note' => $note->note,
+        ];
+
+        $statusField = $submission->evaluationStatusField();
+
+        if ($statusField) {
+            $payload[$statusField] = $status;
+        } else {
+            foreach (Note::COMPONENT_STATUS_FIELDS as $componentStatusField) {
+                $payload[$componentStatusField] = $status;
+            }
+
+            $payload['status'] = $status;
+        }
+
+        $prepared = Note::prepareWorkflowAttributes($payload);
+
+        if ($prepared['status'] === Note::STATUS_APPROVED) {
+            $calculatedAverage = $this->calculateAverage($prepared);
+            if ($calculatedAverage !== null) {
+                $prepared['note'] = $calculatedAverage;
+            }
+        }
+
+        return $prepared;
+    }
+
     protected function approveSubmission(NoteSubmission $submission): NoteSubmission
     {
         DB::transaction(function () use ($submission) {
+            $submission->loadMissing(['notes']);
+            $this->gradeWorkflow->assertSubmissionHasNotes($submission);
+
             $submission->update([
                 'status' => NoteSubmission::STATUS_APPROVED,
                 'approved_at' => now(),
@@ -187,14 +669,23 @@ class NoteValidationController extends Controller
                 'admin_comment' => null,
             ]);
 
-            Note::query()
-                ->where('submission_id', $submission->id)
-                ->update(Note::prepareWorkflowAttributes([
-                    'status' => Note::STATUS_VALIDATED,
-                    'feedback' => null,
-                    'reviewed_at' => now(),
-                    'updated_at' => now(),
-                ]));
+            foreach ($submission->notes as $note) {
+                $before = $this->captureNoteBeforeState($note);
+                $note->fill($this->buildSubmissionNoteUpdate($note, $submission, Note::STATUS_APPROVED, null));
+                $note->save();
+                $note->refresh();
+                $this->gradeWorkflow->snapshotSubmissionFromNote($submission, $note);
+                $this->logNoteWorkflowChange($note, 'approved', $before, $note->workflowSnapshot(), (int) request()->user()?->id);
+            }
+
+            $latestNote = $submission->notes
+                ->sortByDesc(fn (Note $note) => optional($note->updated_at)?->getTimestamp() ?? 0)
+                ->first();
+
+            if ($latestNote) {
+                $submission->fill($this->gradeWorkflow->submissionSnapshotPayload($latestNote));
+                $submission->save();
+            }
         });
 
         $freshSubmission = $submission->fresh(['groupe.filiere', 'module.filiere', 'teacher.user', 'notes.stagiaire.user']);
@@ -210,6 +701,9 @@ class NoteValidationController extends Controller
     protected function rejectSubmission(NoteSubmission $submission, string $feedback): NoteSubmission
     {
         DB::transaction(function () use ($submission, $feedback) {
+            $submission->loadMissing(['notes']);
+            $this->gradeWorkflow->assertSubmissionHasNotes($submission);
+
             $submission->update([
                 'status' => NoteSubmission::STATUS_REJECTED,
                 'approved_at' => null,
@@ -217,14 +711,23 @@ class NoteValidationController extends Controller
                 'admin_comment' => $feedback,
             ]);
 
-            Note::query()
-                ->where('submission_id', $submission->id)
-                ->update(Note::prepareWorkflowAttributes([
-                    'status' => Note::STATUS_REJECTED,
-                    'feedback' => $feedback,
-                    'reviewed_at' => now(),
-                    'updated_at' => now(),
-                ]));
+            foreach ($submission->notes as $note) {
+                $before = $this->captureNoteBeforeState($note);
+                $note->fill($this->buildSubmissionNoteUpdate($note, $submission, Note::STATUS_REJECTED, $feedback));
+                $note->save();
+                $note->refresh();
+                $this->gradeWorkflow->snapshotSubmissionFromNote($submission, $note);
+                $this->logNoteWorkflowChange($note, 'rejected', $before, $note->workflowSnapshot(), (int) request()->user()?->id);
+            }
+
+            $latestNote = $submission->notes
+                ->sortByDesc(fn (Note $note) => optional($note->updated_at)?->getTimestamp() ?? 0)
+                ->first();
+
+            if ($latestNote) {
+                $submission->fill($this->gradeWorkflow->submissionSnapshotPayload($latestNote));
+                $submission->save();
+            }
         });
 
         $freshSubmission = $submission->fresh(['groupe.filiere', 'module.filiere', 'teacher.user', 'notes.stagiaire.user']);
@@ -293,7 +796,14 @@ class NoteValidationController extends Controller
             ], 404);
         }
 
-        $submission->load(['groupe.filiere', 'module.filiere', 'teacher.user', 'notes.stagiaire.user']);
+        $submission->load([
+            'groupe.filiere',
+            'module.filiere',
+            'teacher.user',
+            'notes.stagiaire.user',
+            'notes.stagiaire.groupe.filiere',
+            'notes.module',
+        ]);
         $submission->loadCount('notes');
 
         return response()->json([
@@ -323,7 +833,43 @@ class NoteValidationController extends Controller
 
     public function validateNote(Note $note): JsonResponse
     {
+        $evaluationType = $this->normalizeEvaluationType((string) request()->input('evaluation_type', request()->query('evaluation_type', '')));
         $note->loadMissing(['submission', 'stagiaire.user', 'stagiaire.groupe', 'module']);
+
+        if ($evaluationType) {
+            $statusField = $this->evaluationStatusField($evaluationType);
+            $currentStatus = $statusField ? Note::normalizeWorkflowStatus($note->{$statusField} ?? null) : Note::STATUS_DRAFT;
+
+            if ($currentStatus !== Note::STATUS_SUBMITTED) {
+                return response()->json([
+                    'message' => 'Aucune evaluation en attente pour cette note.',
+                ], 422);
+            }
+
+            $updatedNote = $this->setEvaluationState(
+                $note,
+                $evaluationType,
+                Note::STATUS_APPROVED,
+                null
+            );
+
+            $submission = $this->syncSubmissionState($updatedNote);
+
+            $this->notifyEvaluationStudent(
+                $updatedNote,
+                sprintf('Votre %s a ete valide.', $this->evaluationLabel($evaluationType))
+            );
+
+            if ($submission && $submission->workflowStatus() === Note::STATUS_APPROVED) {
+                $this->notifySubmissionStudents($submission, 'Vos notes ont Ã©tÃ© validÃ©es');
+            }
+
+            return response()->json([
+                'message' => 'L evaluation a ete validee avec succes.',
+                'note' => new ProfessorNoteResource($updatedNote),
+                'evaluation' => $this->buildEvaluationRow($updatedNote, $evaluationType),
+            ]);
+        }
 
         if ($note->submission) {
             if ($note->submission->submitted_at === null) {
@@ -375,9 +921,47 @@ class NoteValidationController extends Controller
     {
         $validated = $request->validate([
             'feedback' => ['nullable', 'string', 'max:1000'],
+            'evaluation_type' => ['nullable', 'string'],
         ]);
 
+        $evaluationType = $this->normalizeEvaluationType($validated['evaluation_type'] ?? null);
         $note->loadMissing(['submission', 'stagiaire.user', 'stagiaire.groupe', 'module']);
+
+        if ($evaluationType) {
+            $statusField = $this->evaluationStatusField($evaluationType);
+            $currentStatus = $statusField ? Note::normalizeWorkflowStatus($note->{$statusField} ?? null) : Note::STATUS_DRAFT;
+
+            if ($currentStatus !== Note::STATUS_SUBMITTED) {
+                return response()->json([
+                    'message' => 'Aucune evaluation en attente pour cette note.',
+                ], 422);
+            }
+
+            $updatedNote = $this->setEvaluationState(
+                $note,
+                $evaluationType,
+                Note::STATUS_REJECTED,
+                $validated['feedback'] ?? 'Veuillez revoir cette evaluation.'
+            );
+
+            $submission = $this->syncSubmissionState($updatedNote);
+
+            $this->notifyEvaluationStudent(
+                $updatedNote,
+                sprintf(
+                    'Votre %s a ete rejetee. %s',
+                    $this->evaluationLabel($evaluationType),
+                    $validated['feedback'] ?? 'Veuillez consulter le detail de la validation.'
+                )
+            );
+
+            return response()->json([
+                'message' => 'L evaluation a ete rejetee avec succes.',
+                'note' => new ProfessorNoteResource($updatedNote),
+                'evaluation' => $this->buildEvaluationRow($updatedNote, $evaluationType),
+                'submission' => $submission ? new NoteSubmissionResource($submission) : null,
+            ]);
+        }
 
         if ($note->submission) {
             if ($note->submission->submitted_at === null) {
@@ -420,10 +1004,26 @@ class NoteValidationController extends Controller
             ], 422);
         }
 
+        $submission->loadCount('notes');
+
+        if (($submission->notes_count ?? 0) === 0) {
+            $submission->load(['groupe.filiere', 'module.filiere', 'teacher.user']);
+
+            return response()->json([
+                'message' => 'Aucune note n est associee a cette soumission de groupe.',
+                'status' => 'empty',
+                'validated' => false,
+                'count' => 0,
+                'submission' => new NoteSubmissionResource($submission),
+            ]);
+        }
+
         $approvedSubmission = $this->approveSubmission($submission);
 
         return response()->json([
             'message' => 'La soumission du groupe a ete validee.',
+            'status' => 'validated',
+            'validated' => true,
             'count' => $approvedSubmission->notes_count ?? $approvedSubmission->notes()->count(),
             'submission' => new NoteSubmissionResource($approvedSubmission),
         ]);

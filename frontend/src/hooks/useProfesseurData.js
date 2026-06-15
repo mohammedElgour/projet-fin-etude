@@ -2,6 +2,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { professeurApi } from '../services/api';
 import { normalizeCollectionResponse } from '../lib/normalizeCollectionResponse';
 
+const normalizeWorkflowStatus = (value) => {
+  switch (String(value || '').toLowerCase()) {
+    case 'validated':
+    case 'approved':
+      return 'approved';
+    case 'pending':
+    case 'submitted':
+      return 'submitted';
+    case 'rejected':
+      return 'rejected';
+    case 'draft':
+    default:
+      return 'draft';
+  }
+};
+
 const normalizeCatalog = (response) => {
   const payload = response?.data || response || {};
 
@@ -110,6 +126,29 @@ export const useProfesseurData = () => {
           ? (Array.isArray(student.notes) ? student.notes.find((note) => String(note.module_id) === String(selectedModule)) : null)
           : null;
 
+        const componentStatus = (fieldValue, statusValue) => {
+          const status = normalizeWorkflowStatus(statusValue);
+          const hasValue = fieldValue !== null && fieldValue !== undefined && fieldValue !== '';
+
+          if (!hasValue) {
+            return 'not_submitted';
+          }
+
+          if (status === 'approved') {
+            return 'approved';
+          }
+
+          if (status === 'submitted') {
+            return 'submitted';
+          }
+
+          if (status === 'rejected') {
+            return 'rejected';
+          }
+
+          return 'draft';
+        };
+
         return {
           id: student.id,
           studentId: student.id,
@@ -123,8 +162,19 @@ export const useProfesseurData = () => {
           efm: currentNote?.efm ?? '',
           moyenne: currentNote?.moyenne ?? currentNote?.note ?? '',
           noteValue: currentNote?.note ?? '',
-          noteStatus: currentNote?.validation_status ?? 'not_set',
+          noteStatus: normalizeWorkflowStatus(currentNote?.validation_status ?? currentNote?.status ?? null),
+          noteStatusLabel: currentNote?.validation_status ?? currentNote?.status ?? 'draft',
           noteId: currentNote?.id || null,
+          controle1Status: componentStatus(currentNote?.cc1 ?? currentNote?.controle1 ?? null, currentNote?.controle1_status),
+          controle2Status: componentStatus(currentNote?.cc2 ?? currentNote?.controle2 ?? null, currentNote?.controle2_status),
+          controle3Status: componentStatus(currentNote?.cc3 ?? currentNote?.controle3 ?? null, currentNote?.controle3_status),
+          efmStatus: componentStatus(currentNote?.efm ?? null, currentNote?.efm_status),
+          componentStatuses: {
+            controle_1: componentStatus(currentNote?.cc1 ?? currentNote?.controle1 ?? null, currentNote?.controle1_status),
+            controle_2: componentStatus(currentNote?.cc2 ?? currentNote?.controle2 ?? null, currentNote?.controle2_status),
+            controle_3: componentStatus(currentNote?.cc3 ?? currentNote?.controle3 ?? null, currentNote?.controle3_status),
+            efm: componentStatus(currentNote?.efm ?? null, currentNote?.efm_status),
+          },
         };
       }),
     [selectedModule, students]
@@ -146,6 +196,29 @@ export const useProfesseurData = () => {
     }
 
     return null;
+  }, [selectedModule, students]);
+
+  const submissionsByEvaluationType = useMemo(() => {
+    if (!selectedModule) {
+      return {};
+    }
+
+    return students.reduce((accumulator, student) => {
+      const currentNote = Array.isArray(student.notes)
+        ? student.notes.find((note) => String(note.module_id) === String(selectedModule))
+        : null;
+
+      const submission = currentNote?.submission;
+      if (submission) {
+        const evaluationType = submission.evaluation_type || 'legacy';
+
+        if (!accumulator[evaluationType]) {
+          accumulator[evaluationType] = submission;
+        }
+      }
+
+      return accumulator;
+    }, {});
   }, [selectedModule, students]);
 
   const scheduleItems = useMemo(
@@ -201,6 +274,7 @@ export const useProfesseurData = () => {
     setSelectedModule,
     activeGroupId: selectedGroup || bootstrapGroupId,
     activeSubmission,
+    submissionsByEvaluationType,
     loading,
     error,
     setError,

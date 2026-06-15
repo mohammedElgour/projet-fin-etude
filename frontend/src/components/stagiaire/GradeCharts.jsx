@@ -19,17 +19,29 @@ const tooltipStyle = {
 };
 
 export const GradeCharts = ({ notes }) => {
-  const chartData = notes.map((note, index) => ({
+  const gradedNotes = notes.filter((note) => note.finalGrade !== null);
+  const chartData = gradedNotes.map((note, index) => ({
     name: note.moduleName,
     shortName: note.moduleName.length > 12 ? `${note.moduleName.slice(0, 12)}...` : note.moduleName,
-    grade: note.finalGrade || 0,
+    grade: note.finalGrade,
     average: Number(
       (
-        notes.slice(0, index + 1).reduce((sum, item) => sum + Number(item.finalGrade || 0), 0) /
+        gradedNotes.slice(0, index + 1).reduce((sum, item) => sum + Number(item.finalGrade || 0), 0) /
         (index + 1)
       ).toFixed(2)
     ),
   }));
+
+  if (!chartData.length) {
+    return (
+      <PortalCard className="text-center">
+        <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Graphiques en attente</h2>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          Les graphiques apparaitront des qu une note approuvee sera disponible.
+        </p>
+      </PortalCard>
+    );
+  }
 
   return (
     <div className="grid gap-6 xl:grid-cols-2">

@@ -16,6 +16,7 @@ class SaveBatchNotesRequest extends FormRequest
         return [
             'groupe_id' => ['required', 'integer', 'exists:groupes,id'],
             'module_id' => ['required', 'integer', 'exists:modules,id'],
+            'evaluation_type' => ['nullable', 'string', 'in:controle_1,controle_2,controle_3,efm'],
             'notes' => ['required', 'array', 'min:1'],
             'notes.*.stagiaire_id' => ['required', 'integer', 'distinct', 'exists:stagiaires,id'],
             'notes.*.controle_1' => ['nullable', 'numeric', 'min:0', 'max:20'],

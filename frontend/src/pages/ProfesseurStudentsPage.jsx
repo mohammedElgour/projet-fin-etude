@@ -6,6 +6,12 @@ import { useToast } from '../context/ToastContext';
 import { professeurApi } from '../services/api';
 
 const NOTE_FIELDS = ['controle_1', 'controle_2', 'controle_3', 'efm'];
+const EVALUATION_OPTIONS = [
+  { value: 'controle_1', label: 'Controle 1' },
+  { value: 'controle_2', label: 'Controle 2' },
+  { value: 'controle_3', label: 'Controle 3' },
+  { value: 'efm', label: 'EFM' },
+];
 const NOTE_LIMITS = {
   controle_1: 20,
   controle_2: 20,
@@ -71,15 +77,13 @@ const buildNoteFromRow = (row, moduleId) => ({
   efm: row.efm ?? '',
 });
 
-const getValidationErrors = (notes) => {
+const getValidationErrors = (notes, selectedField) => {
   const errors = {};
 
   notes.forEach((note) => {
-    NOTE_FIELDS.forEach((field) => {
-      if (isFieldInvalid(note[field])) {
-        errors[`${note.stagiaire_id}-${field}`] = true;
-      }
-    });
+    if (isFieldInvalid(selectedField, note[selectedField])) {
+      errors[`${note.stagiaire_id}-${selectedField}`] = true;
+    }
   });
 
   return errors;
@@ -92,8 +96,25 @@ const STATUS_BANNER_STYLES = {
   rejected: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300',
 };
 
+const COMPONENT_STATUS_STYLES = {
+  not_submitted: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700',
+  draft: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700',
+  submitted: 'bg-sky-100 text-sky-700 ring-1 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/20',
+  approved: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/20',
+  rejected: 'bg-rose-100 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/20',
+};
+
+const COMPONENT_STATUS_LABELS = {
+  not_submitted: 'Not submitted',
+  draft: 'Draft',
+  submitted: 'Submitted',
+  approved: 'Approved',
+  rejected: 'Rejected',
+};
+
 const ProfesseurStudentsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEvaluationType, setSelectedEvaluationType] = useState('controle_1');
   const [notes, setNotes] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isSavingAll, setIsSavingAll] = useState(false);
@@ -108,7 +129,7 @@ const ProfesseurStudentsPage = () => {
     selectedModule,
     setSelectedModule,
     activeGroupId,
-    activeSubmission,
+    submissionsByEvaluationType,
     loading,
     error,
     setError,
@@ -130,6 +151,7 @@ const ProfesseurStudentsPage = () => {
     setSaveMessage('');
   }, [selectedGroup, selectedModule]);
 
+  const activeSubmission = submissionsByEvaluationType?.[selectedEvaluationType] || null;
   const activeSubmissionStatus = activeSubmission?.status || 'draft';
   const isSubmissionLocked = activeSubmissionStatus === 'pending' || activeSubmissionStatus === 'approved';
 
@@ -182,6 +204,28 @@ const ProfesseurStudentsPage = () => {
       rows.map((row) => {
         const note = notesByStudentId[buildNoteKey(row.id, selectedModule)] || buildNoteFromRow(row, selectedModule);
         const status = getGradeStatus(note);
+        const readStatus = (value, statusValue) => {
+          const parsedStatus = String(statusValue || '').toLowerCase();
+          const hasValue = value !== '' && value !== null && value !== undefined;
+
+          if (!hasValue) {
+            return 'not_submitted';
+          }
+
+          if (parsedStatus === 'validated' || parsedStatus === 'approved') {
+            return 'approved';
+          }
+
+          if (parsedStatus === 'submitted' || parsedStatus === 'pending') {
+            return 'submitted';
+          }
+
+          if (parsedStatus === 'rejected') {
+            return 'rejected';
+          }
+
+          return 'draft';
+        };
 
         return {
           ...row,
@@ -191,6 +235,10 @@ const ProfesseurStudentsPage = () => {
           efm: note.efm,
           moyenne: status.moyenne,
           uiStatus: status,
+          controle1Status: readStatus(note.controle_1, row.controle1Status),
+          controle2Status: readStatus(note.controle_2, row.controle2Status),
+          controle3Status: readStatus(note.controle_3, row.controle3Status),
+          efmStatus: readStatus(note.efm, row.efmStatus),
         };
       }),
     [notesByStudentId, rows, selectedModule]
@@ -202,171 +250,85 @@ const ProfesseurStudentsPage = () => {
   const centeredHeaderClassName = 'text-center';
   const centeredCellClassName = 'text-center';
 
-  const columns = useMemo(
-    () => [
-      { key: 'name', header: 'Stagiaire' },
-      { key: 'groupe', header: 'Groupe', className: centeredCellClassName, headerClassName: centeredHeaderClassName },
-      { key: 'filiere', header: 'Filiere', className: centeredCellClassName, headerClassName: centeredHeaderClassName },
-      {
-        key: 'controle_1',
-        header: 'Controle 1',
-        className: centeredCellClassName,
-        headerClassName: centeredHeaderClassName,
-        render: (row) => {
-          const isInvalid = Boolean(validationErrors[`${row.id}-controle_1`]);
+  const renderComponentStatus = (statusKey) => {
+    const label = COMPONENT_STATUS_LABELS[statusKey] || COMPONENT_STATUS_LABELS.not_submitted;
 
-          return (
-            <div className="flex justify-center">
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                max="20"
-                step="0.25"
-                value={row.controle_1}
-                onChange={(event) => handleNoteChange(row.id, 'controle_1', event.target.value)}
-                disabled={!selectedModule || isSavingAll || isSubmittingAll || isSubmissionLocked}
-                className={`${inputClassName} ${
-                  isInvalid
-                    ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-400 focus:ring-rose-100 dark:border-rose-500/70 dark:bg-rose-500/10 dark:text-rose-200'
-                    : 'border-slate-200 dark:border-slate-800'
-                }`}
-              />
-            </div>
-          );
-        },
-      },
-      {
-        key: 'controle_2',
-        header: 'Controle 2',
-        className: centeredCellClassName,
-        headerClassName: centeredHeaderClassName,
-        render: (row) => {
-          const isInvalid = Boolean(validationErrors[`${row.id}-controle_2`]);
+    return (
+      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${COMPONENT_STATUS_STYLES[statusKey] || COMPONENT_STATUS_STYLES.not_submitted}`}>
+        {label}
+      </span>
+    );
+  };
 
-          return (
-            <div className="flex justify-center">
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                max="20"
-                step="0.25"
-                value={row.controle_2}
-                onChange={(event) => handleNoteChange(row.id, 'controle_2', event.target.value)}
-                disabled={!selectedModule || isSavingAll || isSubmittingAll || isSubmissionLocked}
-                className={`${inputClassName} ${
-                  isInvalid
-                    ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-400 focus:ring-rose-100 dark:border-rose-500/70 dark:bg-rose-500/10 dark:text-rose-200'
-                    : 'border-slate-200 dark:border-slate-800'
-                }`}
-              />
-            </div>
-          );
-        },
-      },
-      {
-        key: 'controle_3',
-        header: 'Controle 3',
-        className: centeredCellClassName,
-        headerClassName: centeredHeaderClassName,
-        render: (row) => {
-          const isInvalid = Boolean(validationErrors[`${row.id}-controle_3`]);
+  const renderEvaluationCell = (row, field, statusField) => {
+    const isInvalid = Boolean(validationErrors[`${row.id}-${field}`]);
+    const fieldLabel = field === 'controle_1' ? 'Controle 1' : field === 'controle_2' ? 'Controle 2' : field === 'controle_3' ? 'Controle 3' : 'EFM';
+    const max = field === 'efm' ? 40 : 20;
+    const inputValue = row[field];
 
-          return (
-            <div className="flex justify-center">
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                max="20"
-                step="0.25"
-                value={row.controle_3}
-                onChange={(event) => handleNoteChange(row.id, 'controle_3', event.target.value)}
-                disabled={!selectedModule || isSavingAll || isSubmittingAll || isSubmissionLocked}
-                className={`${inputClassName} ${
-                  isInvalid
-                    ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-400 focus:ring-rose-100 dark:border-rose-500/70 dark:bg-rose-500/10 dark:text-rose-200'
-                    : 'border-slate-200 dark:border-slate-800'
-                }`}
-              />
-            </div>
-          );
-        },
-      },
-      {
-        key: 'efm',
-        header: 'EFM',
-        className: centeredCellClassName,
-        headerClassName: centeredHeaderClassName,
-        render: (row) => {
-          const isInvalid = Boolean(validationErrors[`${row.id}-efm`]);
+    return (
+      <div className="space-y-2">
+        <div className="flex justify-center">
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            max={max}
+            step="0.25"
+            value={inputValue}
+            onChange={(event) => handleNoteChange(row.id, field, event.target.value)}
+            disabled={!selectedModule || isSavingAll || isSubmittingAll || isSubmissionLocked}
+            className={`${inputClassName} ${
+              isInvalid
+                ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-400 focus:ring-rose-100 dark:border-rose-500/70 dark:bg-rose-500/10 dark:text-rose-200'
+                : 'border-slate-200 dark:border-slate-800'
+            }`}
+            aria-label={fieldLabel}
+          />
+        </div>
+        <div className="flex justify-center">
+          {renderComponentStatus(row[statusField])}
+        </div>
+      </div>
+    );
+  };
 
-          return (
-            <div className="flex justify-center">
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                max="40"
-                step="0.25"
-                value={row.efm}
-                onChange={(event) => handleNoteChange(row.id, 'efm', event.target.value)}
-                disabled={!selectedModule || isSavingAll || isSubmittingAll || isSubmissionLocked}
-                className={`${inputClassName} ${
-                  isInvalid
-                    ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-400 focus:ring-rose-100 dark:border-rose-500/70 dark:bg-rose-500/10 dark:text-rose-200'
-                    : 'border-slate-200 dark:border-slate-800'
-                }`}
-              />
-            </div>
-          );
-        },
-      },
-      {
-        key: 'moyenne',
-        header: 'Moyenne',
-        className: centeredCellClassName,
-        headerClassName: centeredHeaderClassName,
-        render: (row) => {
-          if (row.uiStatus.moyenne === null) {
-            return <span className="text-xs font-medium text-slate-400 dark:text-slate-500">-</span>;
-          }
+  const selectedStatusField = selectedEvaluationType === 'controle_1'
+    ? 'controle1Status'
+    : selectedEvaluationType === 'controle_2'
+      ? 'controle2Status'
+      : selectedEvaluationType === 'controle_3'
+        ? 'controle3Status'
+        : 'efmStatus';
 
-          const textClassName =
-            row.uiStatus.moyenne >= 10 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+  const selectedEvaluationLabel = selectedEvaluationType === 'controle_1'
+    ? 'Controle 1'
+    : selectedEvaluationType === 'controle_2'
+      ? 'Controle 2'
+      : selectedEvaluationType === 'controle_3'
+        ? 'Controle 3'
+        : 'EFM';
 
-          return <span className={`font-semibold ${textClassName}`}>{row.uiStatus.moyenne.toFixed(2)}</span>;
-        },
-      },
-      {
-        key: 'statut',
-        header: 'Statut',
-        className: centeredCellClassName,
-        headerClassName: centeredHeaderClassName,
-        render: (row) => {
-          const styles = {
-            validated: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
-            rejected: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300',
-            incomplete: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
-          };
-
-          return (
-            <div className="flex justify-center">
-              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${styles[row.uiStatus.tone]}`}>
-                {row.uiStatus.label}
-              </span>
-            </div>
-          );
-        },
-      },
-    ],
-    [isSavingAll, isSubmittingAll, isSubmissionLocked, selectedModule, validationErrors]
-  );
+  const columns = [
+    { key: 'name', header: 'Stagiaire' },
+    { key: 'groupe', header: 'Groupe', className: centeredCellClassName, headerClassName: centeredHeaderClassName },
+    { key: 'filiere', header: 'Filiere', className: centeredCellClassName, headerClassName: centeredHeaderClassName },
+    {
+      key: selectedEvaluationType,
+      header: selectedEvaluationLabel,
+      className: centeredCellClassName,
+      headerClassName: centeredHeaderClassName,
+      render: (row) => renderEvaluationCell(row, selectedEvaluationType, selectedStatusField),
+    },
+  ];
 
   const invalidFieldCount = Object.keys(validationErrors).length;
   const hasRows = rows.length > 0;
-  const hasIncompleteNotes = notes.some((note) => NOTE_FIELDS.some((field) => parseNoteValue(note[field]) === null));
+  const enteredEvaluationCount = notes.reduce(
+    (count, note) => count + (parseNoteValue(note[selectedEvaluationType]) !== null ? 1 : 0),
+    0
+  );
+  const hasAnyEnteredEvaluation = enteredEvaluationCount > 0;
   const canSaveDraft =
     Boolean(selectedModule) &&
     Boolean(activeGroupId) &&
@@ -376,7 +338,7 @@ const ProfesseurStudentsPage = () => {
     !isSavingAll &&
     !isSubmittingAll &&
     !isSubmissionLocked;
-  const canSubmit = canSaveDraft && !hasIncompleteNotes;
+  const canSubmit = canSaveDraft && hasAnyEnteredEvaluation;
 
   const submissionBanner = useMemo(() => {
     if (!activeSubmission) {
@@ -419,6 +381,7 @@ const ProfesseurStudentsPage = () => {
   const buildPayload = () => ({
     groupe_id: Number(activeGroupId),
     module_id: Number(selectedModule),
+    evaluation_type: selectedEvaluationType,
     notes: notes.map((note) => ({
       stagiaire_id: note.stagiaire_id,
       controle_1: parseNoteValue(note.controle_1),
@@ -460,11 +423,13 @@ const ProfesseurStudentsPage = () => {
       return;
     }
 
-    const nextValidationErrors = getValidationErrors(notes);
+    const nextValidationErrors = getValidationErrors(notes, selectedEvaluationType);
     setValidationErrors(nextValidationErrors);
 
     if (Object.keys(nextValidationErrors).length > 0) {
-      const message = 'Corrigez les notes invalides. Les controles doivent etre entre 0 et 20 et l EFM entre 0 et 40.';
+      const message = selectedEvaluationType === 'efm'
+        ? 'Corrigez les notes invalides. L EFM doit etre entre 0 et 40.'
+        : 'Corrigez les notes invalides. Cette evaluation doit etre entre 0 et 20.';
       setError(message);
       notifyError('Notes invalides', message);
       return;
@@ -493,20 +458,15 @@ const ProfesseurStudentsPage = () => {
       return;
     }
 
-    const nextValidationErrors = getValidationErrors(notes);
+    const nextValidationErrors = getValidationErrors(notes, selectedEvaluationType);
     setValidationErrors(nextValidationErrors);
 
     if (Object.keys(nextValidationErrors).length > 0) {
-      const message = 'Corrigez les notes invalides avant la soumission. Les controles doivent etre entre 0 et 20 et l EFM entre 0 et 40.';
+      const message = selectedEvaluationType === 'efm'
+        ? 'Corrigez les notes invalides avant la soumission. L EFM doit etre entre 0 et 40.'
+        : 'Corrigez les notes invalides avant la soumission. Cette evaluation doit etre entre 0 et 20.';
       setError(message);
       notifyError('Notes invalides', message);
-      return;
-    }
-
-    if (hasIncompleteNotes) {
-      const message = 'Renseignez les 4 notes pour chaque stagiaire avant de soumettre le groupe.';
-      setError(message);
-      notifyError('Soumission impossible', message);
       return;
     }
 
@@ -516,8 +476,17 @@ const ProfesseurStudentsPage = () => {
 
     try {
       await professeurApi.submitNotesBatch(buildPayload());
-      setSaveMessage('La soumission du groupe a ete envoyee a l admin pour validation.');
-      success('Soumission envoyee', 'Toutes les notes du groupe ont ete soumises en une seule action.');
+      setSaveMessage(
+        hasAnyEnteredEvaluation
+          ? `${enteredEvaluationCount} évaluation(s) soumise(s) à l administrateur.`
+          : 'La soumission du groupe a ete envoyee a l admin pour validation.'
+      );
+      success(
+        'Soumission envoyee',
+        hasAnyEnteredEvaluation
+          ? `${enteredEvaluationCount} évaluation(s) prête(s) ont ete soumises a l administrateur.`
+          : 'La soumission du groupe a ete envoyee a l administrateur.'
+      );
       await reload();
     } catch (submitError) {
       const apiMessage = submitError?.response?.data?.message || 'Impossible de soumettre les notes.';
@@ -581,12 +550,33 @@ const ProfesseurStudentsPage = () => {
           </div>
         </div>
 
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Evaluation a soumettre</label>
+          <select
+            value={selectedEvaluationType}
+            onChange={(event) => setSelectedEvaluationType(event.target.value)}
+            className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm transition focus:border-sky-400 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+          >
+            {EVALUATION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
           <span>{hasRows ? `${rows.length} stagiaires charges` : 'Aucun stagiaire charge'}</span>
           <span className="hidden h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-600 sm:inline-block" />
-          <span>{invalidFieldCount > 0 ? `${invalidFieldCount} champs invalides` : 'Toutes les notes sont valides'}</span>
+          <span>{invalidFieldCount > 0 ? `${invalidFieldCount} champs invalides` : 'Aucune note invalide'}</span>
           <span className="hidden h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-600 sm:inline-block" />
-          <span>{hasIncompleteNotes ? 'Completez toutes les notes avant la soumission' : 'Le groupe est pret a etre soumis'}</span>
+          <span>
+            {activeSubmissionStatus === 'pending'
+              ? `${selectedEvaluationType} en attente de validation.`
+              : hasAnyEnteredEvaluation
+                ? `${selectedEvaluationType} prête à être soumise.`
+                : 'Aucune évaluation saisie pour le moment.'}
+          </span>
         </div>
 
         <ManagementTable
@@ -626,7 +616,7 @@ const ProfesseurStudentsPage = () => {
               }`}
             >
               {isSubmittingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {isSubmittingAll ? 'Soumission...' : 'Soumettre les notes'}
+              {isSubmittingAll ? 'Soumission...' : 'Soumettre les evaluations'}
             </button>
           </div>
         </div>

@@ -62,6 +62,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
         Route::get('/note-submissions', [NoteValidationController::class, 'submissionsIndex']);
         Route::get('/note-submissions/{submission}', [NoteValidationController::class, 'showSubmission']);
+        Route::get('/evaluations', [NoteValidationController::class, 'evaluationQueueIndex']);
+        Route::get('/evaluations/{note}', [NoteValidationController::class, 'showEvaluation']);
         Route::get('/notes/pending', [NoteValidationController::class, 'indexPending']);
         Route::get('/notes/workflow', [NoteValidationController::class, 'workflow']);
         Route::patch('/notes/{note}/validate', [NoteValidationController::class, 'validateNote']);

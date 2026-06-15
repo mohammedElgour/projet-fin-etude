@@ -9,6 +9,7 @@ use App\Models\Stagiaire;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -112,13 +113,124 @@ class GradeWorkflowTest extends TestCase
             ])
             ->json('notes');
 
-        $this->assertTrue(
-            collect($studentNotes)->contains(
-                fn ($note) => (int) $note['module_id'] === (int) $module->id
-                    && $note['validation_status'] === Note::STATUS_VALIDATED
-                    && (float) $note['note'] === 20.0
-            )
-        );
+        $matchingNote = collect($studentNotes)->first(fn ($note) => (int) ($note['module_id'] ?? 0) === (int) $module->id);
+
+        $this->assertNotNull($matchingNote, json_encode($studentNotes, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $this->assertSame(Note::STATUS_APPROVED, $matchingNote['status']);
+        $this->assertSame(Note::STATUS_APPROVED, $matchingNote['validation_status']);
+        $this->assertSame(20.0, (float) $matchingNote['note']);
+    }
+
+    public function test_student_notes_endpoint_uses_approved_submission_state_even_when_note_status_is_stale(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $professorUser = User::where('email', 'prof@ista.test')->firstOrFail();
+        $groupe = $professorUser->professeur->groupes()->where('nom', 'DD101')->firstOrFail();
+        $module = $professorUser->professeur->modules()
+            ->where('code', 'M105')
+            ->where('filiere_id', $groupe->filiere_id)
+            ->firstOrFail();
+
+        $students = Stagiaire::with(['user', 'groupe'])
+            ->where('groupe_id', $groupe->id)
+            ->orderBy('id')
+            ->get();
+
+        Sanctum::actingAs($professorUser);
+
+        $submissionResponse = $this->postJson('/api/professeur/notes/submit', [
+            'groupe_id' => $groupe->id,
+            'module_id' => $module->id,
+            'notes' => $students->values()->map(function (Stagiaire $student, int $index) {
+                return [
+                    'stagiaire_id' => $student->id,
+                    'controle_1' => $index === 0 ? 20 : 10,
+                    'controle_2' => $index === 0 ? 20 : 10,
+                    'controle_3' => $index === 0 ? 20 : 10,
+                    'efm' => $index === 0 ? 40 : 20,
+                ];
+            })->all(),
+        ])->assertOk();
+
+        $submissionId = $submissionResponse->json('submission.id');
+
+        Sanctum::actingAs(User::where('email', 'admin@ista.test')->firstOrFail());
+
+        $this->postJson('/api/admin/notes/validate-group', [
+            'submission_id' => $submissionId,
+        ])->assertOk();
+
+        DB::table('notes')
+            ->where('submission_id', $submissionId)
+            ->update([
+                'status' => Note::STATUS_SUBMITTED,
+                'validation_status' => Note::STATUS_SUBMITTED,
+                'controle1_status' => Note::STATUS_SUBMITTED,
+                'controle2_status' => Note::STATUS_SUBMITTED,
+                'controle3_status' => Note::STATUS_SUBMITTED,
+                'efm_status' => Note::STATUS_SUBMITTED,
+                'note' => 20,
+            ]);
+
+        Sanctum::actingAs(User::where('email', $students->first()->user->email)->firstOrFail());
+
+        $studentNotes = $this->getJson('/api/stagiaire/notes')
+            ->assertOk()
+            ->json('notes');
+
+        $matchingNote = collect($studentNotes)->firstWhere('module_id', $module->id);
+
+        $this->assertNotNull($matchingNote);
+        $this->assertSame(Note::STATUS_APPROVED, $matchingNote['status']);
+        $this->assertSame(Note::STATUS_APPROVED, $matchingNote['validation_status']);
+        $this->assertSame(20.0, (float) $matchingNote['note']);
+    }
+
+    public function test_admin_validate_group_returns_empty_state_when_submission_has_no_notes(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $adminUser = User::where('email', 'admin@ista.test')->firstOrFail();
+        $groupe = \App\Models\Groupe::query()->firstOrFail();
+        $module = Module::query()->firstOrFail();
+
+        foreach (\App\Models\Groupe::query()->orderBy('id')->get() as $candidateGroup) {
+            $candidateModule = Module::query()
+                ->orderBy('id')
+                ->get()
+                ->first(fn (Module $candidate) => !NoteSubmission::query()
+                    ->where('groupe_id', $candidateGroup->id)
+                    ->where('module_id', $candidate->id)
+                    ->exists());
+
+            if ($candidateModule) {
+                $groupe = $candidateGroup;
+                $module = $candidateModule;
+                break;
+            }
+        }
+
+        $submission = NoteSubmission::query()->create([
+            'groupe_id' => $groupe->id,
+            'module_id' => $module->id,
+            'teacher_id' => null,
+            'status' => NoteSubmission::STATUS_PENDING,
+            'submitted_at' => now(),
+            'approved_at' => null,
+            'rejected_at' => null,
+            'admin_comment' => null,
+        ]);
+
+        Sanctum::actingAs($adminUser);
+
+        $this->postJson('/api/admin/notes/validate-group', [
+            'submission_id' => $submission->id,
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'empty')
+            ->assertJsonPath('validated', false)
+            ->assertJsonPath('count', 0);
     }
 
     public function test_professor_and_admin_note_validation_enforces_the_new_score_limits(): void

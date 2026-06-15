@@ -1,10 +1,53 @@
 import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { CheckCircle2, ChevronLeft, ChevronRight, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, Clock3, XCircle } from 'lucide-react';
 
 const pageSize = 8;
 
-const formatGrade = (value) => (value === null || value === undefined ? '-' : `${value}/20`);
+const formatGrade = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number.toFixed(number % 1 === 0 ? 0 : 1)}/20` : '-';
+};
+
+const getStatusBadge = (note) => {
+  if (note?.moduleStatus === 'approved') {
+    return {
+      label: 'Valide',
+      className:
+        'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20',
+      icon: CheckCircle2,
+    };
+  }
+
+  if (note?.moduleStatus === 'rejected') {
+    return {
+      label: 'Non valide',
+      className:
+        'bg-rose-50 text-rose-700 ring-1 ring-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/20',
+      icon: XCircle,
+    };
+  }
+
+  if (note?.moduleStatus === 'submitted') {
+    return {
+      label: 'En cours',
+      className:
+        'bg-amber-50 text-amber-700 ring-1 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20',
+      icon: Clock3,
+    };
+  }
+
+  return {
+    label: 'Pas encore evalue',
+    className:
+      'bg-slate-100 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700',
+    icon: CircleDashed,
+  };
+};
 
 const GradesTable = ({ notes }) => {
   const [page, setPage] = useState(1);
@@ -44,17 +87,17 @@ const GradesTable = ({ notes }) => {
                   <span className="font-semibold text-slate-950 dark:text-white">{formatGrade(note.finalGrade)}</span>
                 </td>
                 <td className="px-5 py-4">
-                  <span
-                    className={clsx(
-                      'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold',
-                      note.passed
-                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20'
-                        : 'bg-rose-50 text-rose-700 ring-1 ring-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/20'
-                    )}
-                  >
-                    {note.passed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                    {note.passed ? 'Valide' : 'Non valide'}
-                  </span>
+                  {(() => {
+                    const status = getStatusBadge(note);
+                    const StatusIcon = status.icon;
+
+                    return (
+                      <span className={clsx('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold', status.className)}>
+                        <StatusIcon className="h-3.5 w-3.5" />
+                        {status.label}
+                      </span>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}

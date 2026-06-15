@@ -27,7 +27,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { authApi, setAuthToken } from '../../services/api';
+import { adminApi, authApi, setAuthToken } from '../../services/api';
 import { notificationApi } from '../../services/api';
 import NotificationBell from '../common/NotificationBell';
 import SidebarItem from './SidebarItem';
@@ -427,12 +427,32 @@ const DashboardLayout = ({ role, actions }) => {
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingEvaluationsCount, setPendingEvaluationsCount] = useState(0);
   const profileMenuRef = useRef(null);
 
   const config = sidebarConfig[role] || sidebarConfig.stagiaire;
   const decoratedConfig = useMemo(() => {
+    const pendingBadge = role === 'admin' ? pendingEvaluationsCount : 0;
+
     if (role !== 'stagiaire') {
-      return config;
+      if (role !== 'admin') {
+        return config;
+      }
+
+      return {
+        ...config,
+        sections: config.sections.map((section) => ({
+          ...section,
+          items: section.items.map((item) =>
+            item.key === 'grades'
+              ? {
+                  ...item,
+                  badge: pendingBadge,
+                }
+              : item
+          ),
+        })),
+      };
     }
 
     return {
@@ -450,7 +470,7 @@ const DashboardLayout = ({ role, actions }) => {
         ),
       })),
     };
-  }, [config, role, unreadCount]);
+  }, [config, pendingEvaluationsCount, role, unreadCount]);
   const pageMeta = config.pages[location.pathname] || config.pages[baseRouteByRole[role]];
   const userName = useMemo(() => user?.name || user?.email || 'Utilisateur', [user]);
   const userInitial = useMemo(() => userName.charAt(0).toUpperCase(), [userName]);
@@ -475,6 +495,33 @@ const DashboardLayout = ({ role, actions }) => {
       isMounted = false;
     };
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (role !== 'admin') {
+      setPendingEvaluationsCount(0);
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    adminApi
+      .dashboardStats()
+      .then((payload) => {
+        if (isMounted) {
+          const statsPayload = payload?.kpis || payload?.data?.kpis || payload?.data || {};
+          setPendingEvaluationsCount(Number(statsPayload.pending_evaluations || statsPayload.pending_notes || 0));
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setPendingEvaluationsCount(0);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname, role]);
 
   useEffect(() => {
     setProfileMenuOpen(false);

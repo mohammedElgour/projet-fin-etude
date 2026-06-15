@@ -48,17 +48,20 @@ const ResourceCrudPage = ({
   const [deleting, setDeleting] = useState(false);
   const [activeActionId, setActiveActionId] = useState(null);
   const toast = useToast();
+  const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
+  const safeColumns = useMemo(() => (Array.isArray(columns) ? columns : []), [columns]);
+  const safeSummaryCards = useMemo(() => (Array.isArray(summaryCards) ? summaryCards : []), [summaryCards]);
 
   const rows = useMemo(
     () =>
-      items.map((item) => {
+      safeItems.map((item) => {
         const row = toRow(item, dependencies);
         return {
           ...row,
           _raw: item,
         };
       }),
-    [dependencies, items, toRow]
+    [dependencies, safeItems, toRow]
   );
 
   useEffect(() => {
@@ -171,9 +174,9 @@ const ResourceCrudPage = ({
 
   return (
     <div className="space-y-6">
-      {summaryCards.length ? (
+      {safeSummaryCards.length ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {summaryCards.map((card) => (
+          {safeSummaryCards.map((card) => (
             <AdminMetricCard
               key={card.title}
               title={card.title}
@@ -201,7 +204,7 @@ const ResourceCrudPage = ({
 
         <ManagementTable
           data={rows}
-          columns={columns}
+          columns={safeColumns}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           loading={loading}
@@ -229,7 +232,7 @@ const ResourceCrudPage = ({
             renderFilters
               ? renderFilters({
                   dependencies,
-                  items,
+                  items: safeItems,
                   rows,
                   appliedFilters,
                   draftFilters,
@@ -251,8 +254,8 @@ const ResourceCrudPage = ({
             ? createTitle
             : detailTitle
         }
-        fields={formFields(dependencies, modalMode, activeItem?._raw || null)}
-        detailFields={detailsFields(dependencies, activeItem?._raw || null)}
+          fields={formFields(dependencies, modalMode, activeItem?._raw || null)}
+          detailFields={detailsFields(dependencies, activeItem?._raw || null)}
         initialValues={currentInitialValues}
         onClose={closeModal}
         onSubmit={handleSubmit}

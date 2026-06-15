@@ -32,8 +32,12 @@ import { getGradeSummary, getStudentInfo, normalizeStudentNotes } from '../compo
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const formatGrade = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return 'N/A';
+  }
+
   const number = Number(value);
-  return Number.isFinite(number) ? number.toFixed(number % 1 === 0 ? 0 : 1) : '0';
+  return Number.isFinite(number) ? number.toFixed(number % 1 === 0 ? 0 : 1) : 'N/A';
 };
 
 const formatRelativeTime = (value) => {
@@ -62,6 +66,10 @@ const formatRelativeTime = (value) => {
 };
 
 const getPerformanceBadge = (grade) => {
+  if (grade === null || grade === undefined || Number.isNaN(Number(grade))) {
+    return { label: 'En attente', tone: 'from-slate-500 to-slate-700', icon: Lightbulb };
+  }
+
   if (grade >= 17) {
     return { label: 'Exceptional', tone: 'from-emerald-500 to-teal-500', icon: Sparkles };
   }
@@ -237,21 +245,24 @@ const StagiaireDashboard = () => {
   const normalizedNotes = useMemo(() => normalizeStudentNotes(notes), [notes]);
   const summary = useMemo(() => getGradeSummary(normalizedNotes), [normalizedNotes]);
 
+  const gradedNotes = useMemo(() => normalizedNotes.filter((note) => note.finalGrade !== null), [normalizedNotes]);
+
   const { bestNote, bestModuleLabel } = useMemo(() => {
-    const sorted = [...normalizedNotes].sort((a, b) => (b.finalGrade ?? -1) - (a.finalGrade ?? -1));
+    const sorted = [...gradedNotes].sort((a, b) => (b.finalGrade ?? -1) - (a.finalGrade ?? -1));
     const best = sorted[0] || null;
 
     return {
       bestNote: best,
       bestModuleLabel: best?.moduleName || 'Module',
     };
-  }, [normalizedNotes]);
+  }, [gradedNotes]);
 
   const progressMetrics = useMemo(() => {
     const totalModules = summary.totalModules || 0;
+    const hasApprovedGrades = summary.hasApprovedGrades;
     const validationPercentage = totalModules ? Math.round((summary.passed / totalModules) * 100) : 0;
-    const averageProgress = Math.round((summary.average / 20) * 100);
-    const successRate = totalModules
+    const averageProgress = hasApprovedGrades ? Math.round((summary.average / 20) * 100) : 0;
+    const successRate = hasApprovedGrades && totalModules
       ? Math.round(((summary.average / 20) * 0.6 + (summary.passed / totalModules) * 0.4) * 100)
       : 0;
 
@@ -262,14 +273,14 @@ const StagiaireDashboard = () => {
       successRate,
       completedModules: summary.passed,
     };
-  }, [summary.average, summary.passed, summary.totalModules]);
+  }, [summary.average, summary.hasApprovedGrades, summary.passed, summary.totalModules]);
 
   const latestAnnouncement = useMemo(() => announcements[0] || null, [announcements]);
 
   const timelineItems = useMemo(() => {
     const items = [];
 
-    const latestGradeNote = [...normalizedNotes]
+    const latestGradeNote = [...gradedNotes]
       .filter((note) => note.created_at)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
 
@@ -284,7 +295,7 @@ const StagiaireDashboard = () => {
       });
     }
 
-    const validatedNote = [...normalizedNotes]
+    const validatedNote = [...gradedNotes]
       .filter((note) => note.passed)
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
 
@@ -322,7 +333,7 @@ const StagiaireDashboard = () => {
     }
 
     return items.slice(0, 4);
-  }, [latestAnnouncement, normalizedNotes, recommendation]);
+  }, [gradedNotes, latestAnnouncement, recommendation]);
 
   const motivation = useMemo(() => {
     if (summary.average >= 15) {
@@ -352,7 +363,9 @@ const StagiaireDashboard = () => {
   }, [progressMetrics.completedModules, summary.average]);
 
   const academicYear = student.academicYear;
-  const badge = bestNote ? getPerformanceBadge(bestNote.finalGrade || 0) : getPerformanceBadge(summary.average || 0);
+  const badge = bestNote ? getPerformanceBadge(bestNote.finalGrade) : getPerformanceBadge(summary.average);
+  const averageDisplay = summary.average === null ? 'N/A' : `${formatGrade(summary.average)}/20`;
+  const bestGradeDisplay = bestNote ? `${formatGrade(bestNote.finalGrade)} / 20` : averageDisplay;
   const BadgeIcon = badge.icon;
   const MotivationIcon = motivation.icon;
 
@@ -435,11 +448,11 @@ const StagiaireDashboard = () => {
                 <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-100/75">Modules</p>
                   <p className="mt-2 text-3xl font-semibold text-white">{summary.totalModules}</p>
-                  <p className="mt-1 text-sm text-sky-100/80">Tracked from validated grades</p>
+                  <p className="mt-1 text-sm text-sky-100/80">Tracked from approved grades</p>
                 </div>
                 <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-100/75">Average</p>
-                  <p className="mt-2 text-3xl font-semibold text-white">{formatGrade(summary.average)}/20</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">{averageDisplay}</p>
                   <p className="mt-1 text-sm text-sky-100/80">Real-time academic signal</p>
                 </div>
               </div>
@@ -451,7 +464,7 @@ const StagiaireDashboard = () => {
                 </div>
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-2 text-sm font-semibold text-white ring-1 ring-white/15">
                   <BadgeIcon className="h-4 w-4" />
-                  {bestNote ? `${formatGrade(bestNote.finalGrade)}/20` : `${formatGrade(summary.average)}/20`}
+                  {bestGradeDisplay}
                 </span>
               </div>
             </div>
@@ -467,7 +480,7 @@ const StagiaireDashboard = () => {
           icon={BookOpenCheck}
           label="Total Modules"
           value={summary.totalModules}
-          helper="Modules with recorded grades"
+          helper={summary.hasApprovedGrades ? 'Modules with approved grades' : 'Waiting for approval'}
           gradient="bg-gradient-to-br from-sky-500 to-blue-600"
           progress={summary.totalModules ? 100 : 0}
           note="Your complete academic surface"
@@ -475,17 +488,17 @@ const StagiaireDashboard = () => {
         <MetricCard
           icon={TrendingUp}
           label="Moyenne Generale"
-          value={`${formatGrade(summary.average)}/20`}
-          helper="Current semester average"
+          value={averageDisplay}
+          helper={summary.hasApprovedGrades ? 'Current semester average' : 'Awaiting approved grades'}
           gradient="bg-gradient-to-br from-emerald-500 to-teal-500"
-          progress={(summary.average / 20) * 100}
+          progress={summary.hasApprovedGrades ? (summary.average / 20) * 100 : undefined}
           note="Tracks overall academic momentum"
         />
         <MetricCard
           icon={BadgeCheck}
           label="Modules Valides"
           value={progressMetrics.completedModules}
-          helper="Validated modules"
+          helper="Approved modules"
           gradient="bg-gradient-to-br from-violet-500 to-fuchsia-500"
           progress={progressMetrics.validationPercentage}
           note={`${progressMetrics.validationPercentage}% validation rate`}
@@ -523,7 +536,7 @@ const StagiaireDashboard = () => {
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-4">
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Average Grade Progress</p>
-                    <p className="text-sm font-semibold text-slate-950 dark:text-white">{formatGrade(summary.average)}/20</p>
+                    <p className="text-sm font-semibold text-slate-950 dark:text-white">{averageDisplay}</p>
                   </div>
                   <div className="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                     <div
@@ -615,7 +628,7 @@ const StagiaireDashboard = () => {
                     Grade
                   </span>
                   <span className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-2 text-sm font-semibold text-white shadow-lg">
-                    {bestNote ? `${formatGrade(bestNote.finalGrade)} / 20` : `${formatGrade(summary.average)} / 20`}
+                    {bestGradeDisplay}
                   </span>
                 </div>
                 <p className="max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
@@ -629,7 +642,7 @@ const StagiaireDashboard = () => {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-300">Performance snapshot</p>
-                    <p className="mt-2 text-2xl font-semibold">{formatGrade(summary.average)}/20</p>
+                    <p className="mt-2 text-2xl font-semibold">{averageDisplay}</p>
                   </div>
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">
                     <CircleGauge className="h-7 w-7 text-cyan-200" />

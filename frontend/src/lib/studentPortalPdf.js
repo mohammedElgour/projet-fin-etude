@@ -761,11 +761,43 @@ const downloadPdf = (filename, title, lines) => {
 
 const loadImage = (src) =>
   new Promise((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
+    const candidates = [src];
+
+    try {
+      const url = new URL(src, window.location.href);
+      if (url.hostname === '127.0.0.1') {
+        const localhostUrl = new URL(url.toString());
+        localhostUrl.hostname = 'localhost';
+        candidates.push(localhostUrl.toString());
+      } else if (url.hostname === 'localhost') {
+        const loopbackUrl = new URL(url.toString());
+        loopbackUrl.hostname = '127.0.0.1';
+        candidates.push(loopbackUrl.toString());
+      }
+    } catch (error) {
+      console.debug('[pdf] image URL normalization skipped', { src, error });
+    }
+
+    const tryLoad = (index) => {
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = () => resolve(image);
+      image.onerror = () => {
+        if (index + 1 < candidates.length) {
+          tryLoad(index + 1);
+          return;
+        }
+
+        reject(
+          new Error(
+            `Impossible de charger l'image du planning. URLs testees: ${candidates.join(' -> ')}`
+          )
+        );
+      };
+      image.src = candidates[index];
+    };
+
+    tryLoad(0);
   });
 
 const imageToJpegData = async (src) => {

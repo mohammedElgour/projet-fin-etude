@@ -7,6 +7,7 @@ use App\Models\Filier;
 use App\Models\Groupe;
 use App\Models\Module;
 use App\Models\Note;
+use App\Models\NoteSubmission;
 use App\Models\Professeur;
 use App\Models\Stagiaire;
 use Carbon\CarbonImmutable;
@@ -29,7 +30,7 @@ class DashboardController extends Controller
             $totalNotes = Note::count();
 
             $validatedNotes = Note::applyWorkflowStatusFilter(Note::query(), Note::STATUS_VALIDATED)->count();
-            $pendingNotes = Note::applyWorkflowStatusFilter(Note::query(), Note::STATUS_SUBMITTED)->count();
+            $pendingNotes = $this->countPendingEvaluations();
             $rejectedNotes = Note::applyWorkflowStatusFilter(Note::query(), Note::STATUS_REJECTED)->count();
             $successCount = Note::applyWorkflowStatusFilter(Note::query(), Note::STATUS_VALIDATED)
                 ->where('note', '>=', 10)
@@ -92,6 +93,7 @@ class DashboardController extends Controller
                     'notes' => $totalNotes,
                     'validated_notes' => $validatedNotes,
                     'pending_notes' => $pendingNotes,
+                    'pending_evaluations' => $pendingNotes,
                     'rejected_notes' => $rejectedNotes,
                     'average_grade' => round($averageGrade, 2),
                     'success_rate' => $successRate,
@@ -122,6 +124,14 @@ class DashboardController extends Controller
                 'message' => 'Server error',
             ], 500);
         }
+    }
+
+    private function countPendingEvaluations(): int
+    {
+        return NoteSubmission::query()
+            ->whereNotNull('submitted_at')
+            ->where('status', NoteSubmission::STATUS_PENDING)
+            ->count();
     }
 
     private function calculateGrowthChange(string $modelClass): float

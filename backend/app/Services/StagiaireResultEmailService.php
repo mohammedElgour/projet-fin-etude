@@ -59,10 +59,26 @@ class StagiaireResultEmailService
         }
 
         try {
+            Log::debug('Preparing results availability email send.', [
+                'stagiaire_id' => $stagiaire->id,
+                'user_id' => $user->id,
+                'email' => $email,
+                'mailer' => config('mail.default'),
+                'mail_host' => config('mail.mailers.smtp.host'),
+                'mail_port' => config('mail.mailers.smtp.port'),
+            ]);
+
             Mail::to($email)->send(new ResultsAvailableMail(
                 $user->name ?: trim(($user->first_name ?? '').' '.($user->last_name ?? '')) ?: 'Stagiaire',
                 $context['average']
             ));
+
+            Log::info('Results availability email send completed.', [
+                'stagiaire_id' => $stagiaire->id,
+                'user_id' => $user->id,
+                'email' => $email,
+                'mailer' => config('mail.default'),
+            ]);
 
             DB::table('stagiaire_result_emails')
                 ->where('stagiaire_id', $stagiaire->id)

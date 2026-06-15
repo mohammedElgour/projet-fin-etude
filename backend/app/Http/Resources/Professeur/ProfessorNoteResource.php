@@ -14,23 +14,57 @@ class ProfessorNoteResource extends JsonResource
             ? $this->resource->workflowStatus()
             : Note::normalizeWorkflowStatus($this->status ?: $this->validation_status ?: null);
 
+        $finalAverage = $this->resource instanceof Note
+            ? $this->resource->finalAverage()
+            : ($status === Note::STATUS_APPROVED && $this->note !== null ? (float) $this->note : null);
+
         return [
             'id' => $this->id,
             'submission_id' => $this->submission_id,
             'stagiaire_id' => $this->stagiaire_id,
             'module_id' => $this->module_id,
             'cc1' => $this->cc1 !== null ? (float) $this->cc1 : null,
+            'controle1_status' => Note::normalizeWorkflowStatus($this->controle1_status ?? null),
             'cc2' => $this->cc2 !== null ? (float) $this->cc2 : null,
+            'controle2_status' => Note::normalizeWorkflowStatus($this->controle2_status ?? null),
             'cc3' => $this->cc3 !== null ? (float) $this->cc3 : null,
+            'controle3_status' => Note::normalizeWorkflowStatus($this->controle3_status ?? null),
             'efm' => $this->efm !== null ? (float) $this->efm : null,
-            'note' => $this->note !== null ? (float) $this->note : null,
-            'moyenne' => $this->note !== null ? (float) $this->note : null,
+            'efm_status' => Note::normalizeWorkflowStatus($this->efm_status ?? null),
+            'note' => $finalAverage,
+            'moyenne' => $finalAverage,
             'status' => $status,
-            'validation_status' => $this->validation_status ?: $status,
-            'is_validated' => $status === 'validated',
+            'validation_status' => $this->validation_status ? Note::normalizeWorkflowStatus($this->validation_status) : $status,
+            'is_validated' => $status === Note::STATUS_APPROVED,
             'feedback' => $this->feedback,
             'reviewed_at' => optional($this->reviewed_at)?->toISOString(),
             'updated_at' => optional($this->updated_at)?->toISOString(),
+            'validation_progress' => [
+                'draft' => collect([
+                    $this->controle1_status,
+                    $this->controle2_status,
+                    $this->controle3_status,
+                    $this->efm_status,
+                ])->filter(fn ($componentStatus) => Note::normalizeWorkflowStatus($componentStatus ?? null) === Note::STATUS_DRAFT)->count(),
+                'submitted' => collect([
+                    $this->controle1_status,
+                    $this->controle2_status,
+                    $this->controle3_status,
+                    $this->efm_status,
+                ])->filter(fn ($componentStatus) => Note::normalizeWorkflowStatus($componentStatus ?? null) === Note::STATUS_SUBMITTED)->count(),
+                'approved' => collect([
+                    $this->controle1_status,
+                    $this->controle2_status,
+                    $this->controle3_status,
+                    $this->efm_status,
+                ])->filter(fn ($componentStatus) => Note::normalizeWorkflowStatus($componentStatus ?? null) === Note::STATUS_APPROVED)->count(),
+                'rejected' => collect([
+                    $this->controle1_status,
+                    $this->controle2_status,
+                    $this->controle3_status,
+                    $this->efm_status,
+                ])->filter(fn ($componentStatus) => Note::normalizeWorkflowStatus($componentStatus ?? null) === Note::STATUS_REJECTED)->count(),
+            ],
             'stagiaire' => $this->whenLoaded('stagiaire', function () {
                 return [
                     'id' => $this->stagiaire?->id,
@@ -60,7 +94,7 @@ class ProfessorNoteResource extends JsonResource
 
                 return [
                     'id' => $this->submission?->id,
-                    'status' => $submissionStatus,
+                    'status' => Note::normalizeWorkflowStatus($submissionStatus),
                     'submitted_at' => optional($this->submission?->submitted_at)?->toISOString(),
                     'approved_at' => optional($this->submission?->approved_at)?->toISOString(),
                     'rejected_at' => optional($this->submission?->rejected_at)?->toISOString(),

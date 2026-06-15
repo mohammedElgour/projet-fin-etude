@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { stagiaireApi } from '../services/api';
 import { normalizeCollectionResponse } from '../lib/normalizeCollectionResponse';
+import { WORKFLOW_STATUS, normalizeStudentNotes } from '../components/stagiaire/studentPortalUtils';
 
 const normalizeStagiaireNotes = (payload) => {
   const rawNotes = Array.isArray(payload) ? payload : Array.isArray(payload?.notes) ? payload.notes : [];
@@ -19,6 +20,9 @@ const normalizeStagiaireNotes = (payload) => {
     controle3: note?.controle3 ?? note?.cc3 ?? null,
   }));
 };
+
+const countApprovedModules = (notes = []) =>
+  normalizeStudentNotes(notes).filter((note) => note.overallStatus === WORKFLOW_STATUS.APPROVED).length;
 
 export const useStagiaireData = () => {
   const [notes, setNotes] = useState([]);
@@ -55,7 +59,9 @@ export const useStagiaireData = () => {
 
         if (notesRes.status === 'fulfilled') {
           const normalizedNotes = normalizeStagiaireNotes(notesRes.value);
-          const validatedModulesCount = Number(notesRes.value?.validated_modules_count ?? normalizedNotes.length);
+          const validatedModulesCount = Number(
+            notesRes.value?.validated_modules_count ?? countApprovedModules(normalizedNotes)
+          );
           const totalModulesCount = Number(notesRes.value?.total_modules_count ?? normalizedNotes.length);
           const nonValidatedModulesCount = Number(
             notesRes.value?.non_validated_modules_count ?? Math.max(totalModulesCount - validatedModulesCount, 0)
@@ -68,9 +74,24 @@ export const useStagiaireData = () => {
             nonValidatedModulesCount,
             transcriptAvailable: Boolean(
               notesRes.value?.transcript_available ??
-                (totalModulesCount > 0 && validatedModulesCount === totalModulesCount)
+              (totalModulesCount > 0 && validatedModulesCount === totalModulesCount)
             ),
           });
+
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('[stagiaire] notes response', {
+              validated_modules_count: validatedModulesCount,
+              total_modules_count: totalModulesCount,
+              non_validated_modules_count: nonValidatedModulesCount,
+              sample: normalizedNotes.slice(0, 3).map((note) => ({
+                id: note.id,
+                module_id: note.module_id ?? note.moduleId ?? null,
+                status: note.status ?? null,
+                submission_status: note.submission_status ?? null,
+                note: note.note ?? note.moyenne ?? null,
+              })),
+            });
+          }
         } else {
           setNotes([]);
           setTranscriptSummary({
