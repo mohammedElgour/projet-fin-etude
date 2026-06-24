@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Eye, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Eye, Plus, Trash2 } from 'lucide-react';
 import ManagementTable from './ManagementTable';
 import CrudModal from './CrudModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
@@ -18,7 +18,6 @@ const ResourceCrudPage = ({
   emptyMessage,
   addLabel,
   createTitle,
-  editTitle,
   detailTitle,
   deleteTitle,
   deleteDescription,
@@ -26,11 +25,9 @@ const ResourceCrudPage = ({
   formFields = () => [],
   toRow,
   createItem,
-  updateItem,
   deleteItem,
   buildInitialValues,
   buildCreatePayload,
-  buildUpdatePayload,
   getItemName,
   validateForm,
   dependencies = {},
@@ -38,6 +35,7 @@ const ResourceCrudPage = ({
   filterFn,
   renderFilters,
   summaryCards = [],
+  rowActions = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [modalMode, setModalMode] = useState(null);
@@ -50,21 +48,24 @@ const ResourceCrudPage = ({
   const [deleting, setDeleting] = useState(false);
   const [activeActionId, setActiveActionId] = useState(null);
   const toast = useToast();
+  const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
+  const safeColumns = useMemo(() => (Array.isArray(columns) ? columns : []), [columns]);
+  const safeSummaryCards = useMemo(() => (Array.isArray(summaryCards) ? summaryCards : []), [summaryCards]);
 
   const rows = useMemo(
     () =>
-      items.map((item) => {
+      safeItems.map((item) => {
         const row = toRow(item, dependencies);
         return {
           ...row,
           _raw: item,
         };
       }),
-    [dependencies, items, toRow]
+    [dependencies, safeItems, toRow]
   );
 
   useEffect(() => {
-    if (modalMode === 'view' || modalMode === 'edit') {
+    if (modalMode === 'view') {
       const latest = rows.find((row) => row.id === activeItem?.id);
       if (latest) {
         setActiveItem(latest);
@@ -75,11 +76,6 @@ const ResourceCrudPage = ({
   const openCreate = () => {
     setActiveItem(null);
     setModalMode('create');
-  };
-
-  const openEdit = (row) => {
-    setActiveItem(row);
-    setModalMode('edit');
   };
 
   const openView = (row) => {
@@ -132,10 +128,7 @@ const ResourceCrudPage = ({
     try {
       if (modalMode === 'create') {
         await createItem(buildCreatePayload(values, dependencies));
-        toast.success(`${entityLabel} ajoute`, 'La nouvelle entree a ete enregistree avec succes.');
-      } else if (activeItem?._raw) {
-        await updateItem(activeItem._raw.id, buildUpdatePayload(values, activeItem._raw, dependencies));
-        toast.success(`${entityLabel} mis a jour`, 'Les modifications ont ete enregistrees.');
+        toast.success(`${entityLabel} added successfully.`, 'Your changes were saved successfully.');
       }
 
       setModalMode(null);
@@ -145,9 +138,9 @@ const ResourceCrudPage = ({
       const description =
         submitError?.response?.data?.message ||
         Object.values(submitError?.response?.data?.errors || {}).flat().join(' ') ||
-        "Une erreur s'est produite pendant l'enregistrement.";
+        'Unable to connect to the server.';
 
-      toast.error('Enregistrement impossible', description);
+      toast.error(`Failed to save ${entityLabel.toLowerCase()}.`, description);
     } finally {
       setSaving(false);
       setActiveActionId(null);
@@ -166,12 +159,12 @@ const ResourceCrudPage = ({
       await deleteItem(activeItem._raw.id);
       setIsDeleteOpen(false);
       setActiveItem(null);
-      toast.success(`${entityLabel} supprime`, "L'element a ete retire avec succes.");
+      toast.success(`${entityLabel} deleted successfully.`, 'The record has been removed.');
       await reload?.();
     } catch (deleteError) {
       toast.error(
-        'Suppression impossible',
-        deleteError?.response?.data?.message || "La suppression n'a pas pu etre terminee."
+        `Failed to delete ${entityLabel.toLowerCase()}.`,
+        deleteError?.response?.data?.message || 'Unable to connect to the server.'
       );
     } finally {
       setDeleting(false);
@@ -181,9 +174,9 @@ const ResourceCrudPage = ({
 
   return (
     <div className="space-y-6">
-      {summaryCards.length ? (
+      {safeSummaryCards.length ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {summaryCards.map((card) => (
+          {safeSummaryCards.map((card) => (
             <AdminMetricCard
               key={card.title}
               title={card.title}
@@ -211,7 +204,7 @@ const ResourceCrudPage = ({
 
         <ManagementTable
           data={rows}
-          columns={columns}
+          columns={safeColumns}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           loading={loading}
@@ -220,16 +213,14 @@ const ResourceCrudPage = ({
           onAdd={openCreate}
           addLabel={addLabel}
           onView={openView}
-          onEdit={openEdit}
           onDelete={openDelete}
+          rowActions={rowActions}
           actionStates={{
-            edit: saving && modalMode === 'edit',
             delete: deleting,
             activeId: activeActionId,
           }}
           actionIcons={{
             view: Eye,
-            edit: Pencil,
             delete: Trash2,
             add: Plus,
           }}
@@ -241,7 +232,7 @@ const ResourceCrudPage = ({
             renderFilters
               ? renderFilters({
                   dependencies,
-                  items,
+                  items: safeItems,
                   rows,
                   appliedFilters,
                   draftFilters,
@@ -261,17 +252,15 @@ const ResourceCrudPage = ({
         title={
           modalMode === 'create'
             ? createTitle
-            : modalMode === 'edit'
-              ? editTitle
-              : detailTitle
+            : detailTitle
         }
-        fields={formFields(dependencies, modalMode, activeItem?._raw || null)}
-        detailFields={detailsFields(dependencies, activeItem?._raw || null)}
+          fields={formFields(dependencies, modalMode, activeItem?._raw || null)}
+          detailFields={detailsFields(dependencies, activeItem?._raw || null)}
         initialValues={currentInitialValues}
         onClose={closeModal}
         onSubmit={handleSubmit}
         loading={saving}
-        submitLabel={modalMode === 'edit' ? 'Enregistrer' : addLabel}
+        submitLabel={addLabel}
         validate={(values, mode) => validateForm?.(values, mode, dependencies, activeItem?._raw || null)}
       />
 

@@ -9,9 +9,11 @@ use Illuminate\Http\Request;
 
 class ModuleController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $modules = Module::with('filier')->paginate(15);
+        $modules = Module::with('filier')
+            ->orderByDesc('id')
+            ->paginate($request->integer('per_page', 15));
 
         return response()->json($modules);
     }

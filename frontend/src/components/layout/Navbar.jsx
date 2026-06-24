@@ -4,6 +4,7 @@ import { Sun, Moon, Menu, X, Compass } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { authApi, setAuthToken } from '../../services/api';
 
 const publicLinks = [
@@ -22,6 +23,7 @@ const dashboardRouteByRole = {
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const { isAuthenticated, user, logoutLocal } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -35,8 +37,9 @@ export default function Navbar() {
   const handleLogout = async () => {
     try {
       await authApi.logout();
+      toast.success('Logged out successfully.', 'Your session has ended.');
     } catch (error) {
-      // Local logout is enough for the demo even if the API call fails.
+      toast.warning('Logged out locally.', 'The server could not be reached, but your local session was cleared.');
     } finally {
       logoutLocal();
       setAuthToken('');

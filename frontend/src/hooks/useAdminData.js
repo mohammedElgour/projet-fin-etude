@@ -12,7 +12,7 @@ const getRequestErrorMessage = (err, fallbackError) => {
 
 export const useAdminDashboardData = () => {
   const [stats, setStats] = useState(null);
-  const [pendingNotes, setPendingNotes] = useState([]);
+  const [evaluationQueue, setEvaluationQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const loadingRef = useRef(false);
@@ -27,15 +27,36 @@ export const useAdminDashboardData = () => {
     setError('');
 
     try {
-      const [statsRes, pendingRes] = await Promise.all([
+      const [statsResult, submissionsResult] = await Promise.allSettled([
         adminApi.dashboardStats(),
-        adminApi.pendingNotes(),
+        adminApi.evaluationQueue(),
       ]);
 
-      setStats(statsRes);
-      setPendingNotes(pendingRes?.data || []);
-    } catch (err) {
-      setError(err?.response?.data?.message || 'Impossible de charger le tableau de bord admin.');
+      const nextErrors = [];
+
+      if (statsResult.status === 'fulfilled') {
+        const statsRes = statsResult.value;
+        const normalizedStats = statsRes?.kpis || statsRes?.charts ? statsRes : statsRes?.data || {};
+        setStats(normalizedStats);
+      } else {
+        setStats(null);
+        nextErrors.push(getRequestErrorMessage(statsResult.reason, 'Impossible de charger les statistiques admin.'));
+      }
+
+      if (submissionsResult.status === 'fulfilled') {
+        const submissionsRes = submissionsResult.value;
+        const normalizedSubmissions = Array.isArray(submissionsRes)
+          ? submissionsRes
+          : submissionsRes?.data || submissionsRes?.results || [];
+        setEvaluationQueue(normalizedSubmissions);
+      } else {
+        setEvaluationQueue([]);
+        nextErrors.push(getRequestErrorMessage(submissionsResult.reason, 'Impossible de charger la file de validation.'));
+      }
+
+      if (nextErrors.length) {
+        setError(nextErrors.join(' '));
+      }
     } finally {
       loadingRef.current = false;
       setLoading(false);
@@ -60,7 +81,8 @@ export const useAdminDashboardData = () => {
 
   return {
     stats,
-    pendingNotes,
+    evaluationQueue,
+    pendingNotes: evaluationQueue,
     loading,
     error,
     reload: loadData,
@@ -83,9 +105,9 @@ export const useAdminResourceList = (loader, fallbackError) => {
 
     try {
       const response = await loaderRef.current();
-      setItems(normalizeCollectionResponse(response));
+      setItems(normalizeCollectionResponse(response) || []);
     } catch (err) {
-      console.error('Admin resource request failed:', err);
+      console.error(err);
       setItems([]);
       setError(getRequestErrorMessage(err, fallbackError));
     } finally {

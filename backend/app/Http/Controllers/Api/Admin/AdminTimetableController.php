@@ -6,22 +6,30 @@ use App\Http\Controllers\Controller;
 use App\Models\Professeur;
 use App\Models\Stagiaire;
 use App\Models\Timetable;
+use App\Services\NotificationDeliveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class AdminTimetableController extends Controller
 {
+    public function __construct(private NotificationDeliveryService $notifications)
+    {
+    }
+
     public function index(Request $request): JsonResponse
     {
         try {
             $user = $request->user();
             $query = Timetable::with([
                 'groupe.filier',
+                'groupes.filier',
                 'professeurs.user',
                 'creator',
+                'uploader',
             ])->latest();
 
             if ($user->role === 'professeur') {
@@ -29,10 +37,19 @@ class AdminTimetableController extends Controller
                 $query->whereHas('professeurs', fn ($builder) => $builder->where('professeurs.id', $professeur->id));
             } elseif ($user->role === 'stagiaire') {
                 $stagiaire = Stagiaire::where('user_id', $user->id)->firstOrFail();
-                $query->where('groupe_id', $stagiaire->groupe_id);
+                $query->where(function ($builder) use ($stagiaire) {
+                    $builder
+                        ->where('groupe_id', $stagiaire->groupe_id)
+                        ->orWhereHas('groupes', fn ($groupQuery) => $groupQuery->where('groupes.id', $stagiaire->groupe_id));
+                });
             } else {
                 if ($request->filled('groupe_id')) {
-                    $query->where('groupe_id', $request->integer('groupe_id'));
+                    $groupeId = $request->integer('groupe_id');
+                    $query->where(function ($builder) use ($groupeId) {
+                        $builder
+                            ->where('groupe_id', $groupeId)
+                            ->orWhereHas('groupes', fn ($groupQuery) => $groupQuery->where('groupes.id', $groupeId));
+                    });
                 }
 
                 if ($request->filled('professeur_id')) {
@@ -42,7 +59,7 @@ class AdminTimetableController extends Controller
             }
 
             return response()->json(
-                $query->paginate(20)->through(fn (Timetable $timetable) => $this->transformTimetable($timetable))
+                $query->paginate(20)->through(fn (Timetable $timetable) => $this->transformTimetable($timetable, $user->role))
             );
         } catch (Throwable $exception) {
             Log::error('Failed to fetch timetables list.', [
@@ -59,54 +76,68 @@ class AdminTimetableController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $validated = validator($this->normalizeTimetablePayload($request), [
             'title' => ['nullable', 'string', 'max:255'],
-            'image' => ['required', 'image', 'max:5120'],
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'groupe_ids' => ['nullable', 'array'],
+            'groupe_ids.*' => ['integer', 'exists:groupes,id'],
             'groupe_id' => ['nullable', 'exists:groupes,id'],
-            'professeur_ids' => ['nullable', 'array', 'min:1'],
-            'professeur_ids.*' => ['integer', 'exists:professeurs,id'],
-        ]);
+            'professeur_id' => ['nullable', 'integer', 'exists:professeurs,id'],
+        ])->validate();
 
-        $hasGroupe = !empty($validated['groupe_id']);
-        $hasProfesseurs = !empty($validated['professeur_ids']);
+        $groupeIds = $this->extractGroupIds($validated);
+        $professeurId = $validated['professeur_id'] ?? null;
 
-        if ($hasGroupe === $hasProfesseurs) {
+        if ($groupeIds->isEmpty() && blank($professeurId)) {
             return response()->json([
-                'message' => 'Choisissez soit un groupe, soit un ou plusieurs professeurs.',
+                'message' => 'Veuillez sélectionner au moins un groupe ou un professeur.',
                 'errors' => [
-                    'groupe_id' => ['Choisissez soit un groupe, soit un ou plusieurs professeurs.'],
+                    'groupe_ids' => ['Veuillez sélectionner au moins un groupe ou un professeur.'],
                 ],
             ], 422);
         }
 
-        $timetable = DB::transaction(function () use ($request, $validated) {
-            $path = $request->file('image')->store('timetables', 'public');
+        try {
+            $timetable = DB::transaction(function () use ($request, $validated, $groupeIds, $professeurId) {
+                $path = $request->file('image')->store('timetables', 'public');
 
-            $timetable = Timetable::create([
-                'title' => $validated['title'] ?? null,
-                'image_path' => $path,
-                'groupe_id' => $validated['groupe_id'] ?? null,
-                'created_by' => $request->user()->id,
+                $timetable = Timetable::create([
+                    'title' => $validated['title'] ?? null,
+                    'image_path' => $path,
+                    'groupe_id' => $groupeIds->first(),
+                    'created_by' => $request->user()->id,
+                    'uploaded_by' => $request->user()->id,
+                ]);
+
+                $timetable->groupes()->sync($groupeIds->all());
+                $timetable->professeurs()->sync(blank($professeurId) ? [] : [(int) $professeurId]);
+
+                return $timetable->load(['groupe.filier', 'groupes.filier', 'professeurs.user', 'creator', 'uploader']);
+            });
+
+            $this->notifyTimetableRecipients($timetable);
+
+            return response()->json($this->transformTimetable($timetable, $request->user()->role), 201);
+        } catch (Throwable $exception) {
+            Log::error('Failed to store timetable.', [
+                'user_id' => $request->user()?->id,
+                'error' => $exception->getMessage(),
             ]);
 
-            if (!empty($validated['professeur_ids'])) {
-                $timetable->professeurs()->sync($validated['professeur_ids']);
-            }
-
-            return $timetable->load(['groupe.filier', 'professeurs.user', 'creator']);
-        });
-
-        return response()->json($this->transformTimetable($timetable), 201);
+            return response()->json([
+                'message' => "Impossible d'enregistrer l'emploi du temps pour le moment.",
+            ], 500);
+        }
     }
 
     public function show(Request $request, Timetable $timetable): JsonResponse
     {
         try {
-            $timetable->load(['groupe.filier', 'professeurs.user', 'creator']);
+            $timetable->load(['groupe.filier', 'groupes.filier', 'professeurs.user', 'creator', 'uploader']);
 
             abort_unless($this->canAccessTimetable($request->user(), $timetable), 403, 'Acces non autorise a cet emploi du temps.');
 
-            return response()->json($this->transformTimetable($timetable));
+            return response()->json($this->transformTimetable($timetable, $request->user()->role));
         } catch (Throwable $exception) {
             Log::error('Failed to fetch timetable details.', [
                 'user_id' => $request->user()?->id,
@@ -116,6 +147,128 @@ class AdminTimetableController extends Controller
 
             return response()->json([
                 'message' => 'Unable to load this timetable at the moment.',
+            ], 500);
+        }
+    }
+
+    public function download(Request $request, Timetable $timetable)
+    {
+        $timetable->load(['groupes', 'professeurs']);
+
+        if (! $this->canAccessTimetable($request->user(), $timetable)) {
+            return response()->json([
+                'message' => 'Acces non autorise a cet emploi du temps.',
+            ], 403);
+        }
+
+        $path = $this->resolveStoragePath($timetable->image_path);
+
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return response()->json([
+                'message' => 'Fichier introuvable.',
+            ], 404);
+        }
+
+        try {
+            return Storage::disk('public')->download($path, basename($path));
+        } catch (Throwable $exception) {
+            Log::error('Failed to download timetable.', [
+                'user_id' => $request->user()?->id,
+                'timetable_id' => $timetable->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to download this timetable at the moment.',
+            ], 500);
+        }
+    }
+
+    public function update(Request $request, Timetable $timetable): JsonResponse
+    {
+        $validated = validator($this->normalizeTimetablePayload($request), [
+            'title' => ['nullable', 'string', 'max:255'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'groupe_ids' => ['nullable', 'array'],
+            'groupe_ids.*' => ['integer', 'exists:groupes,id'],
+            'groupe_id' => ['nullable', 'exists:groupes,id'],
+            'professeur_id' => ['nullable', 'integer', 'exists:professeurs,id'],
+        ])->validate();
+
+        $groupeIds = $this->extractGroupIds($validated);
+        $professeurId = $validated['professeur_id'] ?? null;
+
+        if ($groupeIds->isEmpty() && blank($professeurId)) {
+            return response()->json([
+                'message' => 'Veuillez sélectionner au moins un groupe ou un professeur.',
+                'errors' => [
+                    'groupe_ids' => ['Veuillez sélectionner au moins un groupe ou un professeur.'],
+                ],
+            ], 422);
+        }
+
+        try {
+            $updated = DB::transaction(function () use ($request, $validated, $timetable, $groupeIds, $professeurId) {
+                $oldPath = null;
+
+                if ($request->hasFile('image')) {
+                    $oldPath = $timetable->image_path;
+                    $timetable->image_path = $request->file('image')->store('timetables', 'public');
+                }
+
+                $timetable->title = $validated['title'] ?? null;
+                $timetable->groupe_id = $groupeIds->first();
+                $timetable->uploaded_by = $request->user()->id;
+                $timetable->save();
+
+                $timetable->groupes()->sync($groupeIds->all());
+                $timetable->professeurs()->sync(blank($professeurId) ? [] : [(int) $professeurId]);
+
+                if ($oldPath) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+
+                return $timetable->load(['groupe.filier', 'groupes.filier', 'professeurs.user', 'creator', 'uploader']);
+            });
+
+            return response()->json($this->transformTimetable($updated, $request->user()->role));
+        } catch (Throwable $exception) {
+            Log::error('Failed to update timetable.', [
+                'user_id' => $request->user()?->id,
+                'timetable_id' => $timetable->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => "Impossible de remplacer l'emploi du temps pour le moment.",
+            ], 500);
+        }
+    }
+
+    public function destroy(Request $request, Timetable $timetable): JsonResponse
+    {
+        try {
+            DB::transaction(function () use ($timetable) {
+                $path = $timetable->image_path;
+                $timetable->delete();
+
+                if ($path) {
+                    Storage::disk('public')->delete($path);
+                }
+            });
+
+            return response()->json([
+                'message' => 'Emploi du temps supprime avec succes.',
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Failed to delete timetable.', [
+                'user_id' => $request->user()?->id,
+                'timetable_id' => $timetable->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => "Impossible de supprimer l'emploi du temps pour le moment.",
             ], 500);
         }
     }
@@ -138,20 +291,128 @@ class AdminTimetableController extends Controller
             $stagiaire = Stagiaire::where('user_id', $user->id)->first();
 
             return $stagiaire
-                ? (int) $timetable->groupe_id === (int) $stagiaire->groupe_id
+                ? (
+                    (int) $timetable->groupe_id === (int) $stagiaire->groupe_id
+                    || $timetable->groupes->contains('id', $stagiaire->groupe_id)
+                )
                 : false;
         }
 
         return false;
     }
 
-    private function transformTimetable(Timetable $timetable): array
+    private function notifyTimetableRecipients(Timetable $timetable): void
     {
+        $timetable->loadMissing([
+            'groupe.stagiaires.user',
+            'groupe.professeurs.user',
+            'groupes.stagiaires.user',
+            'groupes.professeurs.user',
+            'professeurs.user',
+        ]);
+
+        $recipients = collect();
+
+        $groups = $timetable->groupes->isNotEmpty()
+            ? $timetable->groupes
+            : collect($timetable->groupe ? [$timetable->groupe] : []);
+
+        foreach ($groups as $groupe) {
+            $recipients = $recipients->merge(
+                $groupe->stagiaires
+                    ->map(fn (Stagiaire $stagiaire) => $stagiaire->user)
+                    ->filter()
+            );
+
+            $recipients = $recipients->merge(
+                $groupe->professeurs
+                    ->map(fn (Professeur $professeur) => $professeur->user)
+                    ->filter()
+            );
+        }
+
+        $recipients = $recipients
+            ->merge(
+                $timetable->professeurs
+                    ->map(fn (Professeur $professeur) => $professeur->user)
+                    ->filter()
+            )
+            ->unique('id')
+            ->values();
+
+        $this->notifications->sendToUsers(
+            $recipients,
+            'Emploi du temps',
+            $this->buildTimetableNotificationMessage()
+        );
+    }
+
+    private function buildTimetableNotificationMessage(): string
+    {
+        return 'Votre emploi du temps a été mis à jour';
+    }
+
+    private function normalizeTimetablePayload(Request $request): array
+    {
+        $payload = $request->all();
+
+        if ($request->has('group_ids') && ! $request->has('groupe_ids')) {
+            $payload['groupe_ids'] = $request->input('group_ids', []);
+        }
+
+        if ($request->has('teacher_id') && ! $request->has('professeur_id')) {
+            $payload['professeur_id'] = $request->input('teacher_id');
+        }
+
+        return $payload;
+    }
+
+    private function resolveStoragePath(?string $imagePath): ?string
+    {
+        if (!$imagePath) {
+            return null;
+        }
+
+        if (preg_match('/^https?:\/\//i', $imagePath)) {
+            return null;
+        }
+
+        $path = ltrim($imagePath, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        return $path ?: null;
+    }
+
+    /**
+     * @param array<string, mixed> $validated
+     */
+    private function extractGroupIds(array $validated)
+    {
+        return collect($validated['groupe_ids'] ?? [])
+            ->push($validated['groupe_id'] ?? null)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    private function transformTimetable(Timetable $timetable, ?string $role = null): array
+    {
+        $downloadPrefix = match ($role) {
+            'professeur' => 'professeur',
+            'stagiaire' => 'stagiaire',
+            default => 'admin',
+        };
+
         return [
             'id' => $timetable->id,
             'title' => $timetable->title,
             'image_path' => $timetable->image_path,
             'image_url' => $timetable->image_url,
+            'download_url' => "/{$downloadPrefix}/timetables/{$timetable->id}/download",
             'groupe_id' => $timetable->groupe_id,
             'groupe' => $timetable->groupe ? [
                 'id' => $timetable->groupe->id,
@@ -161,6 +422,14 @@ class AdminTimetableController extends Controller
                     'nom' => $timetable->groupe->filiere->nom,
                 ] : null,
             ] : null,
+            'groupes' => $timetable->groupes->map(fn ($groupe) => [
+                'id' => $groupe->id,
+                'nom' => $groupe->nom,
+                'filiere' => $groupe->filiere ? [
+                    'id' => $groupe->filiere->id,
+                    'nom' => $groupe->filiere->nom,
+                ] : null,
+            ])->values(),
             'professeurs' => $timetable->professeurs->map(fn (Professeur $professeur) => [
                 'id' => $professeur->id,
                 'specialite' => $professeur->specialite,
@@ -173,11 +442,18 @@ class AdminTimetableController extends Controller
                 ],
             ])->values(),
             'created_by' => $timetable->created_by,
+            'uploaded_by' => $timetable->uploaded_by,
             'creator' => $timetable->creator ? [
                 'id' => $timetable->creator->id,
                 'name' => $timetable->creator->name,
             ] : null,
-            'audience_type' => $timetable->groupe_id ? 'groupe' : 'professeurs',
+            'uploader' => $timetable->uploader ? [
+                'id' => $timetable->uploader->id,
+                'name' => $timetable->uploader->name,
+            ] : null,
+            'audience_type' => $timetable->groupes->isNotEmpty() && $timetable->professeurs->isNotEmpty()
+                ? 'mixte'
+                : ($timetable->professeurs->isNotEmpty() ? 'professeurs' : 'groupe'),
             'created_at' => optional($timetable->created_at)?->toISOString(),
             'updated_at' => optional($timetable->updated_at)?->toISOString(),
         ];

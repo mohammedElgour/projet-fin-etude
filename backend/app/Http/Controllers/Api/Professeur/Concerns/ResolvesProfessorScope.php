@@ -10,13 +10,8 @@ trait ResolvesProfessorScope
     protected function resolveProfessorProfile(Request $request): Professeur
     {
         return $request->user()
-            ->loadMissing('professeur.filiere')
+            ->loadMissing('professeur.groupes.filiere', 'professeur.modules.filiere')
             ->professeur
             ?? abort(403, 'Profil professeur introuvable.');
-    }
-
-    protected function resolveProfessorFiliereId(Professeur $professeur): ?int
-    {
-        return $professeur->filiere_id ? (int) $professeur->filiere_id : null;
     }
 }

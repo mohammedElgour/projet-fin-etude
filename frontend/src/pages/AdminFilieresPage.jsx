@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BookCopy, Building2, GraduationCap, Layers3 } from 'lucide-react';
 import ResourceCrudPage from '../components/admin/ResourceCrudPage';
 import { useAdminResourceList } from '../hooks/useAdminData';
@@ -9,11 +9,12 @@ const AdminFilieresPage = () => {
     () => adminApi.filieres(),
     'Impossible de charger la liste des filieres.'
   );
+  const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
 
-  const summaryCards = React.useMemo(() => {
-    const totalFilieres = items.length;
-    const totalGroupes = items.reduce((sum, item) => sum + Number(item.groupes_count ?? item.groupes?.length ?? 0), 0);
-    const totalModules = items.reduce((sum, item) => sum + Number(item.modules_count ?? item.modules?.length ?? 0), 0);
+  const summaryCards = useMemo(() => {
+    const totalFilieres = safeItems.length;
+    const totalGroupes = safeItems.reduce((sum, item) => sum + Number(item.groupes_count ?? item.groupes?.length ?? 0), 0);
+    const totalModules = safeItems.reduce((sum, item) => sum + Number(item.modules_count ?? item.modules?.length ?? 0), 0);
     const avgModules = totalFilieres ? (totalModules / totalFilieres).toFixed(1) : '0.0';
 
     return [
@@ -54,14 +55,14 @@ const AdminFilieresPage = () => {
         progress: Math.min(Number(avgModules) * 12, 100),
       },
     ];
-  }, [items]);
+  }, [safeItems]);
 
   return (
     <ResourceCrudPage
       title="Filieres"
       entityLabel="Filiere"
       description="Structurez les parcours de formation avec une presentation plus premium et des actions CRUD harmonisees."
-      items={items}
+      items={safeItems}
       loading={loading}
       error={error}
       reload={reload}

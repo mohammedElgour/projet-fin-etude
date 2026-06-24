@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 export const STORAGE_TOKEN_KEY = 'sms_token';
 export const ADMIN_DASHBOARD_REFRESH_EVENT = 'admin-dashboard:refresh';
 
@@ -34,6 +34,52 @@ const withAdminDashboardRefresh = async (request) => {
   const data = await request();
   emitAdminDashboardRefresh();
   return data;
+};
+
+const normalizeGroupValidationPayload = (payload = {}) => {
+  const submissionId = payload.submission_id ?? payload.submissionId ?? null;
+  const groupeId = payload.groupe_id ?? payload.group_id ?? payload.groupId ?? payload.groupeId ?? null;
+  const moduleId = payload.module_id ?? payload.moduleId ?? null;
+
+  return {
+    ...(submissionId !== null && submissionId !== undefined ? { submission_id: Number(submissionId) } : {}),
+    ...(groupeId !== null && groupeId !== undefined ? { groupe_id: Number(groupeId) } : {}),
+    ...(moduleId !== null && moduleId !== undefined ? { module_id: Number(moduleId) } : {}),
+    ...(payload.feedback !== undefined ? { feedback: payload.feedback } : {}),
+  };
+};
+
+const logApiValidationError = (context, error, payload) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(error);
+    console.debug(`[api] ${context} failed`, {
+      payload,
+      status: error?.response?.status,
+      message: error?.response?.data?.message || error?.message,
+      errors: error?.response?.data?.errors || null,
+    });
+  }
+};
+
+const toError = (error, fallbackMessage = 'Une erreur inattendue est survenue.') => {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  const message =
+    error?.response?.data?.message ||
+    error?.message ||
+    fallbackMessage;
+
+  const normalizedError = new Error(message);
+  normalizedError.name = 'ApiError';
+  normalizedError.cause = error;
+
+  if (error?.response) {
+    normalizedError.response = error.response;
+  }
+
+  return normalizedError;
 };
 
 const initialToken = getStoredToken();
@@ -75,12 +121,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401 && typeof window !== 'undefined') {
+    const isInactiveAccount = error?.response?.status === 403 && error?.response?.data?.code === 'account_inactive';
+
+    if ((error?.response?.status === 401 || isInactiveAccount) && typeof window !== 'undefined') {
       setAuthToken('');
       window.dispatchEvent(new Event('auth:unauthorized'));
     }
 
-    return Promise.reject(error);
+    return Promise.reject(toError(error));
   }
 );
 
@@ -105,13 +153,20 @@ export const notificationApi = {
     const response = await api.get('/notifications');
     return response.data;
   },
+  unreadCount: async () => {
+    const response = await api.get('/notifications/unread-count');
+    return response.data;
+  },
   markRead: async (notificationId) => {
-    const response = await api.patch(`/notifications/${notificationId}/read`);
+    const response = await api.post('/notifications/mark-as-read', { notification_id: notificationId });
     return response.data;
   },
   markAllRead: async () => {
     const response = await api.patch('/notifications/read-all');
     return response.data;
+  },
+  deleteLocal: async (notificationId) => {
+    return { id: notificationId, deleted: true };
   },
 };
 
@@ -228,6 +283,10 @@ export const adminApi = {
     const response = await api.get('/admin/groupes', { params });
     return response.data;
   },
+  notificationGroups: async (params = {}) => {
+    const response = await api.get('/groupes', { params });
+    return response.data;
+  },
   group: async (id) => {
     const response = await api.get(`/admin/groupes/${id}`);
     return response.data;
@@ -266,8 +325,40 @@ export const adminApi = {
     });
     return response.data;
   },
-  pendingNotes: async () => {
-    const response = await api.get('/admin/notes/pending');
+  updateTimetable: async (id, payload) => {
+    const response = await api.post(`/admin/timetables/${id}`, payload, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+  deleteTimetable: async (id) => {
+    const response = await api.delete(`/admin/timetables/${id}`);
+    return response.data;
+  },
+  noteSubmissions: async (params = {}) => {
+    const response = await api.get('/admin/note-submissions', { params });
+    return response.data;
+  },
+  evaluationQueue: async (params = {}) => {
+    const response = await api.get('/admin/evaluations', { params });
+    return response.data;
+  },
+  evaluationDetail: async (noteId, params = {}) => {
+    const response = await api.get(`/admin/evaluations/${noteId}`, { params });
+    return response.data;
+  },
+  noteSubmission: async (id) => {
+    const response = await api.get(`/admin/note-submissions/${id}`);
+    return response.data;
+  },
+  pendingNotes: async (params = {}) => {
+    const response = await api.get('/admin/note-submissions', { params });
+    return response.data;
+  },
+  workflowNotes: async (params = {}) => {
+    const response = await api.get('/admin/notes/workflow', { params });
     return response.data;
   },
   validateNote: async (noteId) => {
@@ -282,6 +373,92 @@ export const adminApi = {
       return response.data;
     });
   },
+  approveEvaluation: async (noteId, evaluationType) => {
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.patch(`/admin/notes/${noteId}/validate`, {
+        evaluation_type: evaluationType,
+      });
+      return response.data;
+    });
+  },
+  rejectEvaluation: async (noteId, evaluationType, feedback = '') => {
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.patch(`/admin/notes/${noteId}/reject`, {
+        evaluation_type: evaluationType,
+        feedback,
+      });
+      return response.data;
+    });
+  },
+  validateNotesGroup: async (payload) => {
+    return withAdminDashboardRefresh(async () => {
+      const normalizedPayload = normalizeGroupValidationPayload(payload);
+    try {
+      console.debug('[api] POST /admin/notes/validate-group', normalizedPayload);
+      const response = await api.post('/admin/notes/validate-group', normalizedPayload);
+      return response.data;
+    } catch (error) {
+      logApiValidationError('POST /admin/notes/validate-group', error, normalizedPayload);
+      throw toError(error, 'Impossible de valider les notes du groupe.');
+    }
+  });
+  },
+  rejectNotesGroup: async (payload) => {
+    return withAdminDashboardRefresh(async () => {
+      const normalizedPayload = normalizeGroupValidationPayload(payload);
+    try {
+      console.debug('[api] POST /admin/notes/reject-group', normalizedPayload);
+      const response = await api.post('/admin/notes/reject-group', normalizedPayload);
+      return response.data;
+    } catch (error) {
+      logApiValidationError('POST /admin/notes/reject-group', error, normalizedPayload);
+      throw toError(error, 'Impossible de rejeter les notes du groupe.');
+    }
+  });
+  },
+  updateManagedNote: async (noteId, payload) => {
+    return withAdminDashboardRefresh(async () => {
+      const response = await api.patch(`/admin/notes/${noteId}`, payload);
+      return response.data;
+    });
+  },
+  sendNotification: async (payload) => {
+    const response = await api.post('/admin/notifications', payload);
+    return response.data;
+  },
+};
+
+export const directeurApi = {
+  workflowNotes: async (params = {}) => {
+    const response = await api.get('/directeur/notes/workflow', { params });
+    return response.data;
+  },
+  validateNotesGroup: async (payload) => {
+    const normalizedPayload = normalizeGroupValidationPayload(payload);
+    try {
+      console.debug('[api] POST /directeur/notes/validate-group', normalizedPayload);
+      const response = await api.post('/directeur/notes/validate-group', normalizedPayload);
+      return response.data;
+    } catch (error) {
+      logApiValidationError('POST /directeur/notes/validate-group', error, normalizedPayload);
+      throw toError(error, 'Impossible de valider les notes du groupe.');
+    }
+  },
+  rejectNotesGroup: async (payload) => {
+    const normalizedPayload = normalizeGroupValidationPayload(payload);
+    try {
+      console.debug('[api] POST /directeur/notes/reject-group', normalizedPayload);
+      const response = await api.post('/directeur/notes/reject-group', normalizedPayload);
+      return response.data;
+    } catch (error) {
+      logApiValidationError('POST /directeur/notes/reject-group', error, normalizedPayload);
+      throw toError(error, 'Impossible de rejeter les notes du groupe.');
+    }
+  },
+  updateManagedNote: async (noteId, payload) => {
+    const response = await api.patch(`/directeur/notes/${noteId}`, payload);
+    return response.data;
+  },
 };
 
 export const professeurApi = {
@@ -293,12 +470,28 @@ export const professeurApi = {
     const response = await api.post('/professeur/notes', payload);
     return response.data;
   },
+  saveNotes: async (payload) => {
+    const response = await api.post('/professeur/notes', payload);
+    return response.data;
+  },
+  saveNotesBatch: async (payload) => {
+    const response = await api.post('/professeur/notes/batch', payload);
+    return response.data;
+  },
+  submitNotesBatch: async (payload) => {
+    const response = await api.post('/professeur/notes/submit', payload);
+    return response.data;
+  },
   updateNote: async (noteId, payload) => {
     const response = await api.patch(`/professeur/notes/${noteId}`, payload);
     return response.data;
   },
   students: async (params = {}) => {
     const response = await api.get('/professeur/students', { params });
+    return response.data;
+  },
+  stagiaires: async (params = {}) => {
+    const response = await api.get('/professeur/stagiaires', { params });
     return response.data;
   },
   catalog: async () => {
@@ -320,8 +513,16 @@ export const stagiaireApi = {
     const response = await api.get('/stagiaire/notes');
     return response.data;
   },
+  transcript: async () => {
+    const response = await api.get('/stagiaire/releve-de-notes');
+    return response.data;
+  },
   schedule: async () => {
     const response = await api.get('/stagiaire/schedule');
+    return response.data;
+  },
+  emploiDuTemps: async () => {
+    const response = await api.get('/stagiaire/emploi-du-temps');
     return response.data;
   },
   timetables: async () => {
@@ -334,6 +535,34 @@ export const stagiaireApi = {
   },
   recommendation: async () => {
     const response = await api.get('/stagiaire/ai-recommendation');
+    return response.data;
+  },
+};
+
+export const profileApi = {
+  get: async (role) => {
+    const response = await api.get(`/${role}/profile`);
+    return response.data;
+  },
+  update: async (role, payload) => {
+    const formData = payload instanceof FormData ? payload : new FormData();
+
+    if (!(payload instanceof FormData)) {
+      Object.entries(payload || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, value);
+        }
+      });
+    }
+
+    formData.set('_method', 'PUT');
+
+    const response = await api.post(`/${role}/profile`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
     return response.data;
   },
 };

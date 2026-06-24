@@ -24,6 +24,30 @@ const buildTouchedState = (fieldList = []) =>
 
 const ensureObject = (value) => (value && typeof value === 'object' ? value : {});
 
+const clampNumericInput = (value, min, max) => {
+  if (value === '') {
+    return value;
+  }
+
+  const parsed = Number(value);
+
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+
+  let nextValue = parsed;
+
+  if (typeof min === 'number' && nextValue < min) {
+    nextValue = min;
+  }
+
+  if (typeof max === 'number' && nextValue > max) {
+    nextValue = max;
+  }
+
+  return String(nextValue);
+};
+
 const CrudModal = ({
   isOpen,
   mode = 'create',
@@ -188,6 +212,23 @@ const CrudModal = ({
                       ? 'border-rose-400 focus:border-rose-500 focus:ring-4 focus:ring-rose-100 dark:border-rose-500 dark:focus:border-rose-400 dark:focus:ring-rose-500/15'
                       : 'border-white/70 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-white/10 dark:focus:border-blue-500 dark:focus:ring-blue-500/15';
 
+                    if (field.type === 'custom' && typeof field.render === 'function') {
+                      return field.render({
+                        value: formValues[field.name],
+                        values: formValues,
+                        initialValues: safeInitialValues,
+                        error: formErrors[field.name],
+                        touched: touched[field.name],
+                        mode,
+                        disabled,
+                        required,
+                        placeholder,
+                        options,
+                        onChange: (nextValue) => handleChange(field.name, nextValue),
+                        onBlur: () => handleBlur(field.name),
+                      });
+                    }
+
                     return (
                       <>
                   <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -305,7 +346,14 @@ const CrudModal = ({
                     <input
                       type={field.type || 'text'}
                       value={formValues[field.name] ?? ''}
-                      onChange={(event) => handleChange(field.name, event.target.value)}
+                      onChange={(event) =>
+                        handleChange(
+                          field.name,
+                          field.type === 'number'
+                            ? clampNumericInput(event.target.value, field.min, field.max)
+                            : event.target.value
+                        )
+                      }
                       onBlur={() => handleBlur(field.name)}
                       className={`${baseInputClassName} ${inputStateClassName}`}
                       required={required}

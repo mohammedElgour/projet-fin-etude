@@ -4,7 +4,6 @@ import {
   ChevronRight,
   Eye,
   Filter,
-  Pencil,
   Plus,
   Search,
   Sparkles,
@@ -58,7 +57,6 @@ const ManagementTable = ({
   data = [],
   columns = [],
   onView,
-  onEdit,
   onDelete,
   searchTerm = '',
   onSearchChange,
@@ -99,6 +97,10 @@ const ManagementTable = ({
   useEffect(() => {
     setPage(1);
   }, [searchTerm, rowFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [data]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -177,7 +179,10 @@ const ManagementTable = ({
                   {columns.map((column) => (
                     <th
                       key={column.key || column.header}
-                      className="bg-slate-50/88 px-5 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 first:rounded-l-[18px] last:rounded-r-[18px] dark:bg-white/5 dark:text-slate-400"
+                      className={[
+                        'bg-slate-50/88 px-5 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 first:rounded-l-[18px] last:rounded-r-[18px] dark:bg-white/5 dark:text-slate-400',
+                        column.headerClassName || '',
+                      ].join(' ')}
                     >
                       {column.header}
                     </th>
@@ -196,18 +201,20 @@ const ManagementTable = ({
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03, duration: 0.2 }}
-                    className="group"
                   >
                     {columns.map((column) => (
                       <td
                         key={column.key || column.header}
-                        className="surface-subtle px-5 py-4 text-sm text-slate-700 first:rounded-l-[22px] last:rounded-r-[22px] group-hover:bg-white dark:text-slate-200 dark:group-hover:bg-slate-900/90"
+                        className={[
+                          'surface-subtle px-5 py-4 text-sm text-slate-700 first:rounded-l-[22px] last:rounded-r-[22px] dark:text-slate-200',
+                          column.className || '',
+                        ].join(' ')}
                       >
                         {column.render ? column.render(row) : (row[column.key] ?? '-')}
                       </td>
                     ))}
                     {!hideActions ? (
-                      <td className="surface-subtle px-5 py-4 first:rounded-l-[22px] last:rounded-r-[22px] group-hover:bg-white dark:group-hover:bg-slate-900/90">
+                      <td className="surface-subtle px-5 py-4 first:rounded-l-[22px] last:rounded-r-[22px]">
                         <div className="flex items-center justify-end gap-2">
                           {onView ? (
                             <IconActionButton
@@ -218,24 +225,22 @@ const ManagementTable = ({
                             />
                           ) : null}
                           {rowActions.map((action) => (
-                            <button
-                              key={`${action.label}-${row.id}`}
-                              type="button"
-                              onClick={() => action.onClick(row)}
-                              className={action.className}
-                            >
-                              {action.label}
-                            </button>
+                            action.render ? (
+                              <React.Fragment key={action.key || `${row.id}-${action.label || 'action'}`}>
+                                {action.render(row)}
+                              </React.Fragment>
+                            ) : (
+                              <button
+                                key={`${action.label}-${row.id}`}
+                                type="button"
+                                disabled={typeof action.disabled === 'function' ? action.disabled(row) : Boolean(action.disabled)}
+                                onClick={() => action.onClick(row)}
+                                className={typeof action.className === 'function' ? action.className(row) : action.className}
+                              >
+                                {typeof action.label === 'function' ? action.label(row) : action.label}
+                              </button>
+                            )
                           ))}
-                          {onEdit ? (
-                            <IconActionButton
-                              icon={actionIcons.edit || Pencil}
-                              label="Modifier"
-                              variant="edit"
-                              loading={Boolean(actionStates.edit && actionStates.activeId === row.id)}
-                              onClick={() => onEdit(row)}
-                            />
-                          ) : null}
                           {onDelete ? (
                             <IconActionButton
                               icon={actionIcons.delete || Trash2}

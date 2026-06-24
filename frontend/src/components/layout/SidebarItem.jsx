@@ -2,7 +2,7 @@ import React from 'react';
 import clsx from 'clsx';
 import { NavLink } from 'react-router-dom';
 
-const SidebarItem = ({ to, icon: Icon, label, collapsed = false, end = false, onClick }) => {
+const SidebarItem = ({ to, icon: Icon, label, collapsed = false, end = false, onClick, badge }) => {
   return (
     <NavLink
       to={to}
@@ -43,13 +43,19 @@ const SidebarItem = ({ to, icon: Icon, label, collapsed = false, end = false, on
           {!collapsed && (
             <span className="relative flex min-w-0 flex-1 items-center justify-between gap-3">
               <span className="truncate">{label}</span>
-              <span
-                className={clsx(
-                  'h-2 w-2 rounded-full transition-all duration-200',
-                  isActive ? 'bg-sky-400' : 'bg-transparent group-hover:bg-slate-300 dark:group-hover:bg-slate-700'
-                )}
-                aria-hidden="true"
-              />
+              {badge ? (
+                <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+                  {badge > 99 ? '99+' : badge}
+                </span>
+              ) : (
+                <span
+                  className={clsx(
+                    'h-2 w-2 rounded-full transition-all duration-200',
+                    isActive ? 'bg-sky-400' : 'bg-transparent group-hover:bg-slate-300 dark:group-hover:bg-slate-700'
+                  )}
+                  aria-hidden="true"
+                />
+              )}
             </span>
           )}
         </>

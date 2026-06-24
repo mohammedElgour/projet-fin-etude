@@ -28,6 +28,7 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
+            'is_active' => true,
         ]);
 
         $token = $user->createToken('api-token')->plainTextToken;
@@ -56,6 +57,13 @@ class AuthController extends Controller
             ]);
         }
 
+        if (! $user->is_active) {
+            return response()->json([
+                'message' => 'Votre compte est désactivé. Veuillez contacter l\'administration.',
+                'code' => 'account_inactive',
+            ], 403);
+        }
+
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([
@@ -63,7 +71,6 @@ class AuthController extends Controller
             'token' => $token,
         ]);
     }
-    
 
     /**
      * Logout user (revoke token).
@@ -75,4 +82,3 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logged out']);
     }
 }
-

@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Facades\Storage;
 
 class Timetable extends Model
 {
@@ -17,6 +16,7 @@ class Timetable extends Model
         'image_path',
         'groupe_id',
         'created_by',
+        'uploaded_by',
     ];
 
     protected $appends = [
@@ -26,6 +26,12 @@ class Timetable extends Model
     public function groupe(): BelongsTo
     {
         return $this->belongsTo(Groupe::class);
+    }
+
+    public function groupes(): BelongsToMany
+    {
+        return $this->belongsToMany(Groupe::class, 'groupe_timetable')
+            ->withTimestamps();
     }
 
     public function professeurs(): BelongsToMany
@@ -39,12 +45,27 @@ class Timetable extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function uploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
     public function getImageUrlAttribute(): ?string
     {
         if (!$this->image_path) {
             return null;
         }
 
-        return Storage::disk('public')->url($this->image_path);
+        if (preg_match('/^https?:\/\//i', $this->image_path)) {
+            return $this->image_path;
+        }
+
+        $path = ltrim($this->image_path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        return url('timetable-images/' . $path);
     }
 }

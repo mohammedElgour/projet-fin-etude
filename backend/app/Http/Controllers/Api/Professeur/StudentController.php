@@ -18,10 +18,12 @@ class StudentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $professeur = $this->resolveProfessorProfile($request);
-        $filiereId = $this->resolveProfessorFiliereId($professeur);
+        $professeur->loadMissing(['groupes', 'modules']);
+
+        $assignedGroupeIds = $professeur->groupes()->pluck('groupes.id');
         $moduleId = $request->integer('module_id');
 
-        if (!$filiereId) {
+        if (!$assignedGroupeIds->count()) {
             return response()->json(
                 ProfessorStudentResource::collection(
                     Stagiaire::query()->whereRaw('1 = 0')->paginate(20)
@@ -38,14 +40,19 @@ class StudentController extends Controller
                         $notes->where('module_id', $moduleId);
                     }
 
-                    $notes->with('module')->latest('updated_at');
+                    $notes->with(['module', 'submission'])->latest('updated_at');
                 },
             ])
-            ->whereHas('groupe', fn ($query) => $query->where('filiere_id', $filiereId));
+            ->whereIn('groupe_id', $assignedGroupeIds);
 
         if ($request->filled('groupe_id')) {
-            $query->where('groupe_id', $request->integer('groupe_id'));
+            $requestedGroupeId = $request->integer('groupe_id');
+            if (!$professeur->groupes->contains(fn ($g) => (int) $g->id === (int) $requestedGroupeId)) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+            $query->where('groupe_id', $requestedGroupeId);
         }
+
 
         if ($request->filled('search')) {
             $search = trim((string) $request->string('search'));
@@ -67,31 +74,24 @@ class StudentController extends Controller
     public function catalog(Request $request): JsonResponse
     {
         $professeur = $this->resolveProfessorProfile($request);
-        $filiereId = $this->resolveProfessorFiliereId($professeur);
+        $professeur->loadMissing(['groupes.filiere', 'modules.filiere']);
 
-        if (!$filiereId) {
-            return response()->json([
-                'groupes' => [],
-                'modules' => [],
-                'filiere' => null,
+        $filieres = $professeur->groupes
+            ->pluck('filiere')
+            ->filter()
+            ->unique('id')
+            ->sortBy('nom')
+            ->values()
+            ->map(fn ($filiere) => [
+                'id' => $filiere->id,
+                'nom' => $filiere->nom,
             ]);
-        }
 
         return response()->json([
-            'groupes' => Groupe::query()
-                ->with('filiere')
-                ->where('filiere_id', $filiereId)
-                ->orderBy('nom')
-                ->get(),
-            'modules' => Module::query()
-                ->with('filiere')
-                ->where('filiere_id', $filiereId)
-                ->orderBy('nom')
-                ->get(),
-            'filiere' => $professeur->filiere ? [
-                'id' => $professeur->filiere->id,
-                'nom' => $professeur->filiere->nom,
-            ] : null,
+            'groupes' => $professeur->groupes->loadMissing('filiere')->sortBy('nom')->values(),
+            'modules' => $professeur->modules->loadMissing('filiere')->sortBy('nom')->values(),
+            'filieres' => $filieres,
         ]);
+
     }
 }

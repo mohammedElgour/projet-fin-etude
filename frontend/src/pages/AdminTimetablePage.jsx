@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ActionButton from '../components/admin/ActionButton';
+import DeleteConfirmModal from '../components/admin/DeleteConfirmModal';
 import ManagementTable from '../components/admin/ManagementTable';
 import TimetableGrid from '../components/timetable/TimetableGrid';
+import { downloadTimetableFile } from '../lib/downloadTimetableFile';
+import { ChevronDown, Search } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAdminResourceList } from '../hooks/useAdminData';
 import { useAdminLookups } from '../hooks/useAdminLookups';
@@ -9,25 +12,60 @@ import { adminApi } from '../services/api';
 
 const createInitialForm = () => ({
   title: '',
-  audienceType: 'groupe',
-  groupeId: '',
-  professeurIds: [],
+  groupIds: [],
+  teacherId: '',
   image: null,
 });
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
 const buildAudienceLabel = (timetable) => {
-  if (timetable.audience_type === 'professeurs') {
-    const names = Array.isArray(timetable.professeurs)
-      ? timetable.professeurs.map((professeur) => professeur.user?.name).filter(Boolean)
+  const groups = Array.isArray(timetable.groupes) && timetable.groupes.length
+    ? timetable.groupes
+    : timetable.groupe
+      ? [timetable.groupe]
       : [];
 
-    return names.length ? names.join(', ') : 'Professeurs';
+  const professor = Array.isArray(timetable.professeurs) && timetable.professeurs.length
+    ? timetable.professeurs[0]
+    : null;
+
+  const groupLabel = groups.length
+    ? groups.length > 1
+      ? groups.map((group) => group.nom).join(', ')
+      : (() => {
+          const groupName = groups[0]?.nom || 'Groupe';
+          const filiereName = groups[0]?.filiere?.nom || groups[0]?.filier?.nom || '';
+
+          return filiereName ? `${groupName} - ${filiereName}` : groupName;
+        })()
+    : '';
+
+  const professorName = professor?.user?.name || 'Professeur';
+  const professorSpecialite = professor?.specialite || '';
+  const professorLabel = professorSpecialite
+    ? `${professorName} - ${professorSpecialite}`
+    : professorName;
+
+  if (groupLabel && professorLabel) {
+    return `${groupLabel} • ${professorLabel}`;
   }
 
-  const groupName = timetable.groupe?.nom || 'Groupe';
-  const filiereName = timetable.groupe?.filiere?.nom || timetable.groupe?.filier?.nom || '';
+  return groupLabel || professorLabel;
+};
 
-  return filiereName ? `${groupName} - ${filiereName}` : groupName;
+const buildProfessorLabel = (professor) => {
+  if (!professor) {
+    return '';
+  }
+
+  const fullName =
+    professor.user?.name ||
+    `${professor.user?.first_name || ''} ${professor.user?.last_name || ''}`.trim() ||
+    'Professeur';
+
+  return professor.specialite ? `${fullName} - ${professor.specialite}` : fullName;
 };
 
 const AdminTimetablePage = () => {
@@ -41,6 +79,45 @@ const AdminTimetablePage = () => {
   const [formValues, setFormValues] = useState(createInitialForm);
   const [previewUrl, setPreviewUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingTimetable, setEditingTimetable] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [teacherQuery, setTeacherQuery] = useState('');
+  const [teacherOpen, setTeacherOpen] = useState(false);
+  const teacherDropdownRef = useRef(null);
+
+  const professorOptions = useMemo(
+    () =>
+      (lookups.professors || []).map((professor) => ({
+        ...professor,
+        value: String(professor.id),
+        label: buildProfessorLabel(professor),
+        searchText: [
+          professor.user?.name,
+          professor.user?.first_name,
+          professor.user?.last_name,
+          professor.specialite,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      })),
+    [lookups.professors]
+  );
+
+  const selectedProfessor = useMemo(
+    () => professorOptions.find((professor) => String(professor.id) === String(formValues.teacherId)) || null,
+    [formValues.teacherId, professorOptions]
+  );
+
+  const filteredProfessorOptions = useMemo(() => {
+    const query = teacherQuery.trim().toLocaleLowerCase('fr-FR');
+
+    if (!query) {
+      return professorOptions;
+    }
+
+    return professorOptions.filter((professor) => professor.searchText.toLocaleLowerCase('fr-FR').includes(query));
+  }, [professorOptions, teacherQuery]);
 
   useEffect(() => {
     if (!formValues.image) {
@@ -56,18 +133,19 @@ const AdminTimetablePage = () => {
     };
   }, [formValues.image]);
 
-  const professorOptions = useMemo(
-    () =>
-      (lookups.professors || []).map((professor) => ({
-        id: String(professor.id),
-        label:
-          `${professor.user?.first_name || ''} ${professor.user?.last_name || ''}`.trim() ||
-          professor.user?.name ||
-          'Professeur',
-        meta: professor.specialite || '',
-      })),
-    [lookups.professors]
-  );
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (teacherDropdownRef.current && !teacherDropdownRef.current.contains(event.target)) {
+        setTeacherOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, []);
 
   const timetableRows = useMemo(
     () =>
@@ -75,11 +153,17 @@ const AdminTimetablePage = () => {
         id: timetable.id,
         title: timetable.title || 'Emploi du temps',
         audience: buildAudienceLabel(timetable),
-        createdBy: timetable.creator?.name || '-',
+        createdBy: timetable.uploader?.name || timetable.creator?.name || '-',
         createdAt: timetable.created_at
           ? new Date(timetable.created_at).toLocaleDateString('fr-FR')
           : '-',
         imageUrl: timetable.image_url,
+        downloadUrl: timetable.download_url,
+        groups: Array.isArray(timetable.groupes) && timetable.groupes.length
+          ? timetable.groupes
+          : timetable.groupe
+            ? [timetable.groupe]
+            : [],
         _raw: timetable,
       })),
     [items]
@@ -91,7 +175,8 @@ const AdminTimetablePage = () => {
         id: timetable.id,
         title: timetable.title || 'Emploi du temps',
         imageUrl: timetable.image_url,
-        groupe: timetable.groupe?.nom || '-',
+        downloadUrl: timetable.download_url,
+        groupe: buildAudienceLabel(timetable),
         filiere: timetable.groupe?.filiere?.nom || timetable.groupe?.filier?.nom || '-',
         audienceType: timetable.audience_type,
         professeurs: Array.isArray(timetable.professeurs)
@@ -105,75 +190,150 @@ const AdminTimetablePage = () => {
     [items]
   );
 
-  const handleAudienceChange = (audienceType) => {
+  const toggleGroup = (groupId) => {
     setFormValues((current) => ({
       ...current,
-      audienceType,
-      groupeId: audienceType === 'groupe' ? current.groupeId : '',
-      professeurIds: audienceType === 'professeurs' ? current.professeurIds : [],
-    }));
-  };
-
-  const handleProfessorSelection = (event) => {
-    const values = Array.from(event.target.selectedOptions).map((option) => option.value);
-
-    setFormValues((current) => ({
-      ...current,
-      professeurIds: values,
+      groupIds: current.groupIds.includes(String(groupId))
+        ? current.groupIds.filter((id) => id !== String(groupId))
+        : [...current.groupIds, String(groupId)],
     }));
   };
 
   const resetForm = () => {
     setFormValues(createInitialForm());
     setPreviewUrl('');
+    setEditingTimetable(null);
+    setTeacherQuery('');
+    setTeacherOpen(false);
+  };
+
+  const handleImageChange = (file) => {
+    if (!file) {
+      setFormValues((current) => ({ ...current, image: null }));
+      return;
+    }
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.warning('Unsupported image format.', 'Use a JPG, JPEG, PNG, or WEBP image.');
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.warning('Image too large.', 'The maximum allowed file size is 5 MB.');
+      return;
+    }
+
+    setFormValues((current) => ({ ...current, image: file }));
+  };
+
+  const handleEdit = (row) => {
+    const timetable = row._raw;
+    setEditingTimetable(timetable);
+    setFormValues({
+      title: timetable.title || '',
+      groupIds: (row.groups || []).map((group) => String(group.id)),
+      teacherId: Array.isArray(timetable.professeurs) && timetable.professeurs[0] ? String(timetable.professeurs[0].id) : '',
+      image: null,
+    });
+    setTeacherQuery('');
+    setTeacherOpen(false);
+    setPreviewUrl('');
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!formValues.image) {
-      toast.error('Image requise', "Ajoutez une image avant d'envoyer l'emploi du temps.");
+    if (!editingTimetable && !formValues.image) {
+      toast.warning('Image required.', 'Add an image before sharing the timetable.');
       return;
     }
 
-    if (formValues.audienceType === 'groupe' && !formValues.groupeId) {
-      toast.error('Groupe requis', 'Selectionnez un groupe destinataire.');
-      return;
-    }
-
-    if (formValues.audienceType === 'professeurs' && !formValues.professeurIds.length) {
-      toast.error('Professeurs requis', 'Selectionnez au moins un professeur.');
+    if (!formValues.groupIds.length && !selectedProfessor) {
+      toast.warning(
+        'Recipient required.',
+        'Veuillez sélectionner au moins un groupe ou un professeur.'
+      );
       return;
     }
 
     const payload = new FormData();
     payload.append('title', formValues.title);
-    payload.append('image', formValues.image);
-
-    if (formValues.audienceType === 'groupe') {
-      payload.append('groupe_id', formValues.groupeId);
-    } else {
-      formValues.professeurIds.forEach((id, index) => {
-        payload.append(`professeur_ids[${index}]`, id);
-      });
+    if (formValues.image) {
+      payload.append('image', formValues.image);
     }
+
+    formValues.groupIds.forEach((groupId) => payload.append('groupe_ids[]', groupId));
+    payload.append('teacher_id', formValues.teacherId);
 
     setSubmitting(true);
 
     try {
-      await adminApi.createTimetable(payload);
-      toast.success('Emploi du temps partage', 'Le document est maintenant disponible pour les destinataires.');
+      if (editingTimetable) {
+        await adminApi.updateTimetable(editingTimetable.id, payload);
+        toast.success('Timetable updated successfully.', 'Selected groups and the professor will see the new version.');
+      } else {
+        await adminApi.createTimetable(payload);
+        toast.success('Timetable shared successfully.', 'The document is now available to the selected groups and professor.');
+      }
       resetForm();
       await reload();
     } catch (submitError) {
       const description =
         submitError?.response?.data?.message ||
         Object.values(submitError?.response?.data?.errors || {}).flat().join(' ') ||
-        "L'envoi de l'emploi du temps a echoue.";
+        'Unable to connect to the server.';
 
-      toast.error('Partage impossible', description);
+      toast.error('Failed to share timetable.', description);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const requestDelete = (row) => {
+    setDeleteTarget(row);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleting) {
+      return;
+    }
+
+    setDeleteTarget(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      await adminApi.deleteTimetable(deleteTarget.id);
+      toast.success('Timetable deleted successfully.', 'The document is no longer visible to associated groups.');
+      await reload();
+      if (editingTimetable?.id === deleteTarget.id) {
+        resetForm();
+      }
+    } catch (deleteError) {
+      toast.error(
+        'Failed to delete timetable.',
+        deleteError?.response?.data?.message || 'Unable to connect to the server.'
+      );
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleDownload = async (downloadUrl, fallbackFilename) => {
+    const downloaded = await downloadTimetableFile({
+      downloadUrl,
+      fallbackFilename,
+    });
+
+    if (!downloaded) {
+      toast.error('Failed to download timetable.', 'Unable to connect to the server.');
     }
   };
 
@@ -183,7 +343,7 @@ const AdminTimetablePage = () => {
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-slate-950 dark:text-white">Partager un emploi du temps</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Envoyez une image a un groupe complet ou a un ou plusieurs professeurs sans sortir des conventions du dashboard.
+            Envoyez une image a un ou plusieurs groupes. Les stagiaires verront automatiquement le planning de leur groupe.
           </p>
         </div>
 
@@ -202,82 +362,131 @@ const AdminTimetablePage = () => {
 
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Destinataires</label>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => handleAudienceChange('groupe')}
-                  className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                    formValues.audienceType === 'groupe'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
-                      : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
-                  }`}
-                >
-                  Un groupe
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAudienceChange('professeurs')}
-                  className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                    formValues.audienceType === 'professeurs'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
-                      : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
-                  }`}
-                >
-                  Un ou plusieurs professeurs
-                </button>
+              <div className="grid max-h-64 gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950 sm:grid-cols-2">
+                {(lookups.groups || []).map((group) => {
+                  const groupId = String(group.id);
+                  const checked = formValues.groupIds.includes(groupId);
+
+                  return (
+                    <label
+                      key={group.id}
+                      className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm transition ${
+                        checked
+                          ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-500/10 dark:text-blue-200'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleGroup(groupId)}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-semibold">{group.nom}</span>
+                        <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                          {group.filiere?.nom || group.filier?.nom || 'Filiere'}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                {formValues.groupIds.length} groupe(s) selectionne(s)
+              </p>
             </div>
 
-            {formValues.audienceType === 'groupe' ? (
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Groupe</label>
-                <select
-                  value={formValues.groupeId}
-                  onChange={(event) => setFormValues((current) => ({ ...current, groupeId: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/15"
+            <div className="md:col-span-2" ref={teacherDropdownRef}>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Professeur *</label>
+              <div className="relative rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950">
+                <button
+                  type="button"
+                  onClick={() => setTeacherOpen((current) => !current)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-900 shadow-sm transition hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:border-slate-600 dark:focus:border-blue-500 dark:focus:ring-blue-500/15"
+                  aria-haspopup="listbox"
+                  aria-expanded={teacherOpen}
                 >
-                  <option value="">Selectionner un groupe</option>
-                  {(lookups.groups || []).map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.nom} - {group.filiere?.nom || group.filier?.nom || 'Filiere'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Professeurs</label>
-                <select
-                  multiple
-                  value={formValues.professeurIds}
-                  onChange={handleProfessorSelection}
-                  className="min-h-40 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/15"
-                >
-                  {professorOptions.map((professor) => (
-                    <option key={professor.id} value={professor.id}>
-                      {professor.label}{professor.meta ? ` - ${professor.meta}` : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  Maintenez `Ctrl` ou `Cmd` pour selectionner plusieurs professeurs.
+                  <span className={selectedProfessor ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}>
+                    {selectedProfessor ? selectedProfessor.label : 'Sélectionner un professeur'}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${teacherOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {teacherOpen ? (
+                  <div className="absolute left-3 right-3 top-[calc(100%-0.25rem)] z-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-950">
+                    <div className="border-b border-slate-200 p-3 dark:border-slate-700">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={teacherQuery}
+                          onChange={(event) => setTeacherQuery(event.target.value)}
+                          placeholder="Rechercher un professeur..."
+                          className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/15"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto p-2">
+                      {filteredProfessorOptions.length > 0 ? (
+                        filteredProfessorOptions.map((professor) => {
+                          const checked = String(professor.id) === String(formValues.teacherId);
+
+                          return (
+                            <button
+                              key={professor.id}
+                              type="button"
+                              onClick={() => {
+                                setFormValues((current) => ({ ...current, teacherId: String(professor.id) }));
+                                setTeacherQuery('');
+                                setTeacherOpen(false);
+                              }}
+                              className={`flex w-full items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                                checked
+                                  ? 'bg-blue-50 text-blue-800 dark:bg-blue-500/10 dark:text-blue-200'
+                                  : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900'
+                              }`}
+                            >
+                              <span className="min-w-0">
+                                <span className="block font-semibold">{professor.user?.name || professor.label}</span>
+                                <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                                  {professor.specialite || 'Spécialité non renseignée'}
+                                </span>
+                              </span>
+                              {checked ? <span className="mt-0.5 text-xs font-semibold text-blue-600 dark:text-blue-300">Sélectionné</span> : null}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                          Aucun professeur trouvé.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {selectedProfessor ? (
+                  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                    Sélectionné: <span className="font-medium text-slate-700 dark:text-slate-200">{selectedProfessor.label}</span>
+                  </p>
+                ) : null}
+                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                  {selectedProfessor ? 'Le professeur recevra aussi cet emploi du temps.' : 'Sélectionnez un professeur avant de partager.'}
                 </p>
               </div>
-            )}
+            </div>
 
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Image</label>
               <input
                 type="file"
-                accept="image/*"
-                onChange={(event) =>
-                  setFormValues((current) => ({
-                    ...current,
-                    image: event.target.files?.[0] || null,
-                  }))
-                }
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                onChange={(event) => handleImageChange(event.target.files?.[0] || null)}
                 className="block w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:font-medium file:text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:file:bg-slate-900 dark:file:text-slate-200"
               />
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">JPG, JPEG, PNG ou WEBP. Taille maximale: 5 Mo.</p>
             </div>
 
             <div className="md:col-span-2 flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -285,7 +494,7 @@ const AdminTimetablePage = () => {
                 Reinitialiser
               </ActionButton>
               <ActionButton type="submit" variant="primary" loading={submitting} disabled={submitting}>
-                Partager l&apos;emploi du temps
+                {editingTimetable ? "Remplacer l'emploi du temps" : "Partager l'emploi du temps"}
               </ActionButton>
             </div>
           </div>
@@ -328,13 +537,17 @@ const AdminTimetablePage = () => {
               key: 'download',
               header: 'Document',
               render: (row) => (
-                <a
-                  href={row.imageUrl}
-                  download
-                  className="text-sm font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-                >
-                  Telecharger
-                </a>
+                row.downloadUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(row.downloadUrl, row.title || 'emploi-du-temps')}
+                    className="text-sm font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+                  >
+                    Telecharger
+                  </button>
+                ) : (
+                  <span className="text-sm text-slate-400 dark:text-slate-500">Image indisponible</span>
+                )
               ),
             },
           ]}
@@ -343,7 +556,9 @@ const AdminTimetablePage = () => {
           loading={loading}
           error={error}
           emptyMessage="Aucun emploi du temps partage"
-          hideActions
+          onEdit={handleEdit}
+          onDelete={requestDelete}
+          actionStates={{ delete: deleting, activeId: deleteTarget?.id }}
         />
       </section>
 
@@ -352,6 +567,20 @@ const AdminTimetablePage = () => {
         showAudience
         emptyTitle="Aucun partage recent"
         emptyDescription="Les emplois du temps envoyes apparaitront ici avec un apercu visuel."
+      />
+
+      <DeleteConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title="Delete timetable?"
+        description={
+          deleteTarget
+            ? `This will permanently remove "${deleteTarget.title || 'this timetable'}" from the shared list.`
+            : ''
+        }
+        itemName={deleteTarget?.title || 'this timetable'}
+        loading={deleting}
+        onCancel={closeDeleteModal}
+        onConfirm={handleDelete}
       />
     </div>
   );

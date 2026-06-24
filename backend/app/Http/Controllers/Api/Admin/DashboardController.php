@@ -7,105 +7,131 @@ use App\Models\Filier;
 use App\Models\Groupe;
 use App\Models\Module;
 use App\Models\Note;
+use App\Models\NoteSubmission;
 use App\Models\Professeur;
 use App\Models\Stagiaire;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class DashboardController extends Controller
 {
     public function stats(): JsonResponse
     {
-        $totalStagiaires = Stagiaire::count();
-        $totalProfesseurs = Professeur::count();
-        $totalFilieres = Filier::count();
-        $totalGroupes = Groupe::count();
-        $totalModules = Module::count();
-        $totalNotes = Note::count();
+        try {
+            $totalStagiaires = Stagiaire::count();
+            $totalProfesseurs = Professeur::count();
+            $totalFilieres = Filier::count();
+            $totalGroupes = Groupe::count();
+            $totalModules = Module::count();
+            $totalNotes = Note::count();
 
-        $validatedNotes = Note::where('validation_status', 'validated')->count();
-        $pendingNotes = Note::where('validation_status', 'pending')->count();
-        $rejectedNotes = Note::where('validation_status', 'rejected')->count();
-        $successCount = Note::where('validation_status', 'validated')->where('note', '>=', 10)->count();
-        $averageGrade = (float) (Note::where('validation_status', 'validated')->avg('note') ?? 0);
-        $successRate = $validatedNotes > 0 ? round(($successCount / $validatedNotes) * 100, 2) : 0;
-        $failRate = $validatedNotes > 0 ? round(100 - $successRate, 2) : 0;
+            $validatedNotes = Note::applyWorkflowStatusFilter(Note::query(), Note::STATUS_VALIDATED)->count();
+            $pendingNotes = $this->countPendingEvaluations();
+            $rejectedNotes = Note::applyWorkflowStatusFilter(Note::query(), Note::STATUS_REJECTED)->count();
+            $successCount = Note::applyWorkflowStatusFilter(Note::query(), Note::STATUS_VALIDATED)
+                ->where('note', '>=', 10)
+                ->count();
+            $averageGrade = (float) (Note::applyWorkflowStatusFilter(Note::query(), Note::STATUS_VALIDATED)->avg('note') ?? 0);
+            $successRate = $validatedNotes > 0 ? round(($successCount / $validatedNotes) * 100, 2) : 0;
+            $failRate = $validatedNotes > 0 ? round(100 - $successRate, 2) : 0;
 
-        $groupesPerFiliere = Filier::query()
-            ->withCount(['groupes', 'modules'])
-            ->orderBy('nom')
-            ->get(['id', 'nom'])
-            ->map(fn (Filier $filiere) => [
-                'id' => $filiere->id,
-                'nom' => $filiere->nom,
-                'groupes_count' => (int) $filiere->groupes_count,
-                'modules_count' => (int) $filiere->modules_count,
-            ]);
+            $groupesPerFiliere = Filier::query()
+                ->withCount(['groupes', 'modules'])
+                ->orderBy('nom')
+                ->get(['id', 'nom'])
+                ->map(fn (Filier $filiere) => [
+                    'id' => $filiere->id,
+                    'nom' => $filiere->nom,
+                    'groupes_count' => (int) $filiere->groupes_count,
+                    'modules_count' => (int) $filiere->modules_count,
+                ]);
 
-        $stagiairesPerGroupe = Groupe::query()
-            ->with(['filier:id,nom'])
-            ->withCount('stagiaires')
-            ->get();
+            $stagiairesPerGroupe = Groupe::query()
+                ->with(['filier:id,nom'])
+                ->withCount('stagiaires')
+                ->get();
 
-        $stagiairesPerGroupe = $stagiairesPerGroupe
-            ->sortBy(fn (Groupe $groupe) => [
-                strtolower($groupe->filier?->nom ?? ''),
-                strtolower($groupe->nom),
-                $groupe->id,
-            ])
-            ->values()
-            ->map(fn (Groupe $groupe) => [
-                'id' => $groupe->id,
-                'nom' => $groupe->nom,
-                'filiere_id' => $groupe->filiere_id,
-                'filiere_nom' => $groupe->filier?->nom,
-                'stagiaires_count' => (int) $groupe->stagiaires_count,
-            ]);
+            $stagiairesPerGroupe = $stagiairesPerGroupe
+                ->sortBy(fn (Groupe $groupe) => [
+                    strtolower($groupe->filier?->nom ?? ''),
+                    strtolower($groupe->nom),
+                    $groupe->id,
+                ])
+                ->values()
+                ->map(fn (Groupe $groupe) => [
+                    'id' => $groupe->id,
+                    'nom' => $groupe->nom,
+                    'filiere_id' => $groupe->filiere_id,
+                    'filiere_nom' => $groupe->filier?->nom,
+                    'stagiaires_count' => (int) $groupe->stagiaires_count,
+                ]);
 
-        $modulesDistribution = Filier::query()
-            ->withCount('modules')
-            ->orderBy('nom')
-            ->get(['id', 'nom'])
-            ->map(fn (Filier $filiere) => [
-                'id' => $filiere->id,
-                'nom' => $filiere->nom,
-                'modules_count' => (int) $filiere->modules_count,
-            ]);
+            $modulesDistribution = Filier::query()
+                ->withCount('modules')
+                ->orderBy('nom')
+                ->get(['id', 'nom'])
+                ->map(fn (Filier $filiere) => [
+                    'id' => $filiere->id,
+                    'nom' => $filiere->nom,
+                    'modules_count' => (int) $filiere->modules_count,
+                ]);
 
-        $growthWindowMonths = 6;
-        $recentGrowth = $this->buildRecentGrowthDataset($growthWindowMonths);
+            $growthWindowMonths = 6;
+            $recentGrowth = $this->buildRecentGrowthDataset($growthWindowMonths);
 
-        return response()->json([
-            'kpis' => [
-                'stagiaires' => $totalStagiaires,
-                'professeurs' => $totalProfesseurs,
-                'filieres' => $totalFilieres,
-                'groupes' => $totalGroupes,
-                'modules' => $totalModules,
-                'notes' => $totalNotes,
-                'validated_notes' => $validatedNotes,
-                'pending_notes' => $pendingNotes,
-                'rejected_notes' => $rejectedNotes,
-                'average_grade' => round($averageGrade, 2),
-                'success_rate' => $successRate,
-                'fail_rate' => $failRate,
-                'changes' => [
-                    'stagiaires' => $this->calculateGrowthChange(Stagiaire::class),
-                    'professeurs' => $this->calculateGrowthChange(Professeur::class),
-                    'filieres' => $this->calculateGrowthChange(Filier::class),
-                    'groupes' => $this->calculateGrowthChange(Groupe::class),
-                    'modules' => $this->calculateGrowthChange(Module::class),
+            return response()->json([
+                'kpis' => [
+                    'stagiaires' => $totalStagiaires,
+                    'professeurs' => $totalProfesseurs,
+                    'filieres' => $totalFilieres,
+                    'groupes' => $totalGroupes,
+                    'modules' => $totalModules,
+                    'notes' => $totalNotes,
+                    'validated_notes' => $validatedNotes,
+                    'pending_notes' => $pendingNotes,
+                    'pending_evaluations' => $pendingNotes,
+                    'rejected_notes' => $rejectedNotes,
+                    'average_grade' => round($averageGrade, 2),
+                    'success_rate' => $successRate,
+                    'fail_rate' => $failRate,
+                    'changes' => [
+                        'stagiaires' => $this->calculateGrowthChange(Stagiaire::class),
+                        'professeurs' => $this->calculateGrowthChange(Professeur::class),
+                        'filieres' => $this->calculateGrowthChange(Filier::class),
+                        'groupes' => $this->calculateGrowthChange(Groupe::class),
+                        'modules' => $this->calculateGrowthChange(Module::class),
+                    ],
                 ],
-            ],
-            'charts' => [
-                'groupes_per_filiere' => $groupesPerFiliere,
-                'stagiaires_per_groupe' => $stagiairesPerGroupe,
-                'modules_distribution' => $modulesDistribution,
-                'recent_growth' => $recentGrowth,
-            ],
-        ]);
+                'charts' => [
+                    'groupes_per_filiere' => $groupesPerFiliere,
+                    'stagiaires_per_groupe' => $stagiairesPerGroupe,
+                    'modules_distribution' => $modulesDistribution,
+                    'recent_growth' => $recentGrowth,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Failed to load admin dashboard stats.', [
+                'user_id' => request()->user()?->id,
+                'exception' => $exception,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Server error',
+            ], 500);
+        }
+    }
+
+    private function countPendingEvaluations(): int
+    {
+        return NoteSubmission::query()
+            ->whereNotNull('submitted_at')
+            ->where('status', NoteSubmission::STATUS_PENDING)
+            ->count();
     }
 
     private function calculateGrowthChange(string $modelClass): float

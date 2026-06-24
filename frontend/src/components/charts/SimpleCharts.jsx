@@ -5,6 +5,15 @@ const formatValue = (value) => {
   return Number(value).toFixed(1);
 };
 
+const EmptyChartState = ({ title = 'Aucune donnee exploitable', hint = 'Les visualisations apparaitront ici des que les informations seront disponibles.' }) => (
+  <div className="flex h-64 items-center justify-center rounded-[24px] border border-dashed border-slate-200/80 bg-slate-50/70 px-6 text-center dark:border-white/10 dark:bg-slate-900/40">
+    <div className="max-w-xs">
+      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</p>
+      <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</p>
+    </div>
+  </div>
+);
+
 export const ChartCard = ({ title, subtitle, children }) => (
   <section className="rounded-[28px] border border-white/70 bg-white/80 p-5 shadow-xl shadow-slate-900/5 backdrop-blur-xl transition dark:border-white/10 dark:bg-slate-950/70 sm:p-6">
     <div className="mb-5">
@@ -35,9 +44,13 @@ export const BarChart = ({ data = [], color = '#0ea5e9' }) => {
   const [hoverIndex, setHoverIndex] = useState(null);
   const [tip, setTip] = useState({ x: 0, y: 0, content: null });
 
+  if (!bars.length) {
+    return <EmptyChartState title="Aucune moyenne a afficher" hint="Renseignez les notes des stagiaires pour voir les performances monter dans ce graphique." />;
+  }
+
   return (
     <div className="space-y-4">
-      <div className="relative flex h-64 items-end gap-3 overflow-x-auto pb-2">
+      <div className="relative flex h-64 items-end gap-3 overflow-x-auto rounded-[24px] bg-[linear-gradient(180deg,rgba(14,165,233,0.06),transparent)] px-3 pb-2 pt-4">
         <Tooltip x={tip.x} y={tip.y}>
           {tip.content}
         </Tooltip>
@@ -123,6 +136,10 @@ export const LineChart = ({
 
   const [hoverIndex, setHoverIndex] = useState(null);
   const [tip, setTip] = useState({ x: 0, y: 0, content: null });
+
+  if (!(data || []).length) {
+    return <EmptyChartState title="Aucun creneau planifie" hint="Le rythme de la semaine s affichera ici des qu un emploi du temps sera associe au groupe." />;
+  }
 
   return (
     <div className="space-y-4">
@@ -234,6 +251,10 @@ export const PieChart = ({ data = [] }) => {
 
   const [hoverLabel, setHoverLabel] = useState(null);
   const [tip, setTip] = useState({ x: 0, y: 0, content: null });
+
+  if (!safeData.length) {
+    return <EmptyChartState title="Aucune repartition disponible" hint="Completez quelques notes pour visualiser instantanement les statuts du groupe." />;
+  }
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-center">

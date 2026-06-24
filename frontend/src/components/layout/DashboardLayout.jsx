@@ -26,7 +26,10 @@ import {
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { authApi, setAuthToken } from '../../services/api';
+import { useToast } from '../../context/ToastContext';
+import { adminApi, authApi, setAuthToken } from '../../services/api';
+import { notificationApi } from '../../services/api';
+import NotificationBell from '../common/NotificationBell';
 import SidebarItem from './SidebarItem';
 
 const baseRouteByRole = {
@@ -34,13 +37,6 @@ const baseRouteByRole = {
   professeur: '/dashboard/professeur',
   stagiaire: '/dashboard/stagiaire',
   directeur: '/dashboard/directeur',
-};
-
-const alertRouteByRole = {
-  admin: '/dashboard/admin/notifications',
-  professeur: '/dashboard/professeur/notifications',
-  stagiaire: '/dashboard/stagiaire/announcements',
-  directeur: '/dashboard/directeur/notifications',
 };
 
 const sidebarConfig = {
@@ -152,7 +148,6 @@ const sidebarConfig = {
         label: 'Main',
         items: [
           { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/professeur' },
-          { key: 'students', label: 'Stagiaires', icon: School, path: '/dashboard/professeur/students' },
           { key: 'notes', label: 'Notes', icon: ScrollText, path: '/dashboard/professeur/notes' },
         ],
       },
@@ -176,15 +171,10 @@ const sidebarConfig = {
         title: 'Espace professeur',
         description: 'Saisissez les notes, gardez un oeil sur la progression du groupe et restez concentre sur la prochaine action utile.',
       },
-      '/dashboard/professeur/students': {
-        eyebrow: 'Pedagogie',
-        title: 'Stagiaires',
-        description: 'Retrouvez la liste des stagiaires sur une page separee.',
-      },
       '/dashboard/professeur/notes': {
         eyebrow: 'Pedagogie',
         title: 'Notes',
-        description: 'Gerez la saisie des notes sans surcharger le dashboard.',
+        description: 'Gerez la saisie des notes et la liste des stagiaires depuis une seule page.',
       },
       '/dashboard/professeur/schedule': {
         eyebrow: 'Planning',
@@ -312,7 +302,8 @@ const sidebarConfig = {
         key: 'system',
         label: 'System',
         items: [
-          { key: 'announcements', label: 'Annonces', icon: Bell, path: '/dashboard/stagiaire/announcements' },
+          { key: 'announcements', label: 'Notifications', icon: Bell, path: '/dashboard/stagiaire/announcements' },
+          { key: 'profile', label: 'Profil', icon: User, path: '/dashboard/stagiaire/profile' },
           { key: 'settings', label: 'Settings', icon: Settings, path: '/dashboard/stagiaire/settings' },
         ],
       },
@@ -335,8 +326,8 @@ const sidebarConfig = {
       },
       '/dashboard/stagiaire/announcements': {
         eyebrow: 'Messages',
-        title: 'Annonces',
-        description: 'Consultez vos annonces hors du dashboard.',
+        title: 'Notifications',
+        description: 'Consultez, filtrez et organisez vos notifications hors du dashboard.',
       },
       '/dashboard/stagiaire/profile': {
         eyebrow: 'Compte',
@@ -372,6 +363,7 @@ const SidebarSection = ({ label, items, collapsed, role, onClose }) => {
             collapsed={collapsed}
             onClick={onClose}
             end={item.path === baseRouteByRole[role]}
+            badge={item.badge}
           />
         ))}
       </div>
@@ -381,12 +373,13 @@ const SidebarSection = ({ label, items, collapsed, role, onClose }) => {
 
 const SidebarContent = ({
   role,
+  overrideConfig,
   collapsed = false,
   mobile = false,
   onClose,
   onToggleCollapse,
 }) => {
-  const config = sidebarConfig[role] || sidebarConfig.stagiaire;
+  const config = overrideConfig || sidebarConfig[role] || sidebarConfig.stagiaire;
 
   return (
     <div
@@ -427,17 +420,108 @@ const SidebarContent = ({
 const DashboardLayout = ({ role, actions }) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logoutLocal } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingEvaluationsCount, setPendingEvaluationsCount] = useState(0);
   const profileMenuRef = useRef(null);
 
   const config = sidebarConfig[role] || sidebarConfig.stagiaire;
+  const decoratedConfig = useMemo(() => {
+    const pendingBadge = role === 'admin' ? pendingEvaluationsCount : 0;
+
+    if (role !== 'stagiaire') {
+      if (role !== 'admin') {
+        return config;
+      }
+
+      return {
+        ...config,
+        sections: config.sections.map((section) => ({
+          ...section,
+          items: section.items.map((item) =>
+            item.key === 'grades'
+              ? {
+                  ...item,
+                  badge: pendingBadge,
+                }
+              : item
+          ),
+        })),
+      };
+    }
+
+    return {
+      ...config,
+      sections: config.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) =>
+          item.key === 'announcements'
+            ? {
+                ...item,
+                label: `Notifications${unreadCount ? ` (${unreadCount})` : ''}`,
+                badge: unreadCount,
+              }
+            : item
+        ),
+      })),
+    };
+  }, [config, pendingEvaluationsCount, role, unreadCount]);
   const pageMeta = config.pages[location.pathname] || config.pages[baseRouteByRole[role]];
   const userName = useMemo(() => user?.name || user?.email || 'Utilisateur', [user]);
   const userInitial = useMemo(() => userName.charAt(0).toUpperCase(), [userName]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    notificationApi
+      .unreadCount()
+      .then((payload) => {
+        if (isMounted) {
+          setUnreadCount(Number(payload?.count || 0));
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setUnreadCount(0);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (role !== 'admin') {
+      setPendingEvaluationsCount(0);
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    adminApi
+      .dashboardStats()
+      .then((payload) => {
+        if (isMounted) {
+          const statsPayload = payload?.kpis || payload?.data?.kpis || payload?.data || {};
+          setPendingEvaluationsCount(Number(statsPayload.pending_evaluations || statsPayload.pending_notes || 0));
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setPendingEvaluationsCount(0);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname, role]);
 
   useEffect(() => {
     setProfileMenuOpen(false);
@@ -470,8 +554,9 @@ const DashboardLayout = ({ role, actions }) => {
   const handleLogout = async () => {
     try {
       await authApi.logout();
+      toast.success('Logged out successfully.', 'Your session has ended.');
     } catch (error) {
-      // Local logout keeps the UI responsive even if the API is unavailable.
+      toast.warning('Logged out locally.', 'The server could not be reached, but your local session was cleared.');
     } finally {
       logoutLocal();
       setAuthToken('');
@@ -490,6 +575,7 @@ const DashboardLayout = ({ role, actions }) => {
         >
           <SidebarContent
             role={role}
+            overrideConfig={decoratedConfig}
             collapsed={desktopCollapsed}
             onToggleCollapse={() => setDesktopCollapsed((value) => !value)}
           />
@@ -511,7 +597,7 @@ const DashboardLayout = ({ role, actions }) => {
             </div>
           </div>
 
-          <header className="surface-panel relative overflow-hidden rounded-[32px] px-5 py-5 sm:px-6 sm:py-6">
+          <header className="surface-panel relative z-40 overflow-visible rounded-[32px] px-5 py-5 sm:px-6 sm:py-6">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.12),transparent_26%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.16),transparent_26%)]" />
             <div className="relative">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
@@ -522,14 +608,7 @@ const DashboardLayout = ({ role, actions }) => {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate(alertRouteByRole[role] || baseRouteByRole[role])}
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/80 bg-white/80 text-slate-600 shadow-[0_14px_30px_-20px_rgba(15,23,42,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-5 w-5" />
-                </button>
+                <NotificationBell />
 
                 <button
                   type="button"
@@ -564,7 +643,7 @@ const DashboardLayout = ({ role, actions }) => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 8 }}
                         transition={{ duration: 0.18 }}
-                        className="surface-panel absolute right-0 top-[calc(100%+0.75rem)] z-30 w-60 rounded-3xl p-2"
+                        className="surface-panel absolute right-0 top-[calc(100%+0.75rem)] z-[60] w-60 rounded-3xl p-2"
                       >
                         <button
                           type="button"
@@ -638,6 +717,7 @@ const DashboardLayout = ({ role, actions }) => {
                 <SidebarContent
                   role={role}
                   mobile
+                  overrideConfig={decoratedConfig}
                 />
               </div>
             </motion.aside>
